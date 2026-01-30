@@ -24,6 +24,7 @@ export const SHIP_MAX_FUEL = 100;
 export const SHIP_FUEL_CONSUMPTION = 0.2; // Fuel used per thrust frame
 export const SHIP_FUEL_REGEN_RATE = 0.15; // Fuel gained per frame while docked
 export const SHIP_PASSIVE_FUEL_REGEN_RATE = 0.10; // Fuel gained per frame while not thrusting
+export const SHIP_FUEL_DEPLETION_PAUSE = 180; // Frames to wait before fuel regens after depletion (3 seconds)
 export const SHIP_COLOR = 0x3b82f6;
 export const SHIP_STROKE_COLOR = 0x1e40af;
 

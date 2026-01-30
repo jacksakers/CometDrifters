@@ -33,6 +33,7 @@ export default class Ship {
         
         // Ship state
         this.fuel = C.SHIP_START_FUEL;
+        this.fuelDepletedTimer = 0; // Pause before regen after fuel depletion
         this.isDocked = false;
         this.dockedComet = null;
         this.alive = true;
@@ -58,7 +59,7 @@ export default class Ship {
      */
     thrust(inputState) {
         if (!this.alive || this.isDocked) return;
-        
+
         if (inputState.thrust && this.fuel > 0) {
             const angle = this.body.angle;
             const force = {
@@ -67,7 +68,14 @@ export default class Ship {
             };
             
             this.scene.matter.applyForce(this.body, force);
+            
+            const previousFuel = this.fuel;
             this.fuel = Math.max(0, this.fuel - C.SHIP_FUEL_CONSUMPTION);
+            
+            // If fuel just depleted, start the pause timer
+            if (previousFuel > 0 && this.fuel === 0) {
+                this.fuelDepletedTimer = C.SHIP_FUEL_DEPLETION_PAUSE;
+            }
             
             // Create thrust particles (Phaser 3.60+ API)
             if (Math.random() < 0.3) { // Emit occasionally
@@ -408,13 +416,15 @@ export default class Ship {
             this.limitVelocity();
             this.attemptDock(inputState, comets);
             
-            // Passive fuel drain when moving fast
+            // Handle fuel depletion pause and passive regeneration
             if (!wasThrusting) {
-                const speed = Math.sqrt(
-                    this.body.velocity.x ** 2 + this.body.velocity.y ** 2
-                );
-                // Very slow regeneration 
-                this.fuel = Math.min(C.SHIP_MAX_FUEL, this.fuel + C.SHIP_PASSIVE_FUEL_REGEN_RATE);
+                // Countdown the fuel depletion timer
+                if (this.fuel === 0 && this.fuelDepletedTimer > 0) {
+                    this.fuelDepletedTimer--;
+                } else if (this.fuelDepletedTimer === 0) {
+                    // Only regenerate fuel if pause timer has expired
+                    this.fuel = Math.min(C.SHIP_MAX_FUEL, this.fuel + C.SHIP_PASSIVE_FUEL_REGEN_RATE);
+                }
             }
         }
         
