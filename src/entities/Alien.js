@@ -290,10 +290,6 @@ export default class Alien {
     shoot() {
         if (!this.alive || this.isDocked) return;
         
-        // Only host spawns alien projectiles (will sync to clients)
-        const { isHost } = window.Playroom;
-        if (!isHost()) return;
-        
         // Add some inaccuracy
         const inaccuracy = (Math.random() - 0.5) * C.ALIEN_SHOOT_ACCURACY * 2;
         const shootAngle = this.body.angle + inaccuracy;
@@ -319,6 +315,27 @@ export default class Alien {
         // Add to scene's projectile list
         if (this.scene.projectiles) {
             this.scene.projectiles.push(projectile);
+        }
+        
+        // Broadcast shoot event for multiplayer (only host broadcasts alien shoots)
+        const { isHost, setState } = window.Playroom;
+        if (isHost && this.scene.multiplayerManager && this.scene.multiplayerManager.isMultiplayerActive()) {
+            // Get current alien shots array or initialize
+            const currentShots = window.Playroom.getState('alienShots') || [];
+            
+            // Add new shot event
+            const shotEvent = {
+                alienId: this.id,
+                timestamp: Date.now(),
+                x: x,
+                y: y,
+                angle: shootAngle
+            };
+            
+            // Keep only recent shots (last 10 shots to avoid memory buildup)
+            const recentShots = [...currentShots, shotEvent].slice(-10);
+            
+            setState('alienShots', recentShots, false); // Use unreliable for fast updates
         }
     }
     

@@ -474,8 +474,6 @@ export default class Ship {
         if (!this.alive || this.isDocked) return;
         if (this.laserCharge < C.LASER_CHARGE_COST) return;
         
-        // All players can shoot (host will sync all projectiles)
-        
         // Consume charge
         this.laserCharge -= C.LASER_CHARGE_COST;
         
@@ -492,20 +490,25 @@ export default class Ship {
                 damage: C.LASER_DAMAGE,
                 speed: C.LASER_SPEED,
                 lifetime: C.LASER_LIFETIME,
-                color: C.LASER_COLOR,
+                color: this.playerColor || C.LASER_COLOR,
                 owner: 'player'
             }
         );
         
-        // Add unique ID and owner info for network sync
-        projectile.id = `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        if (this.playerState) {
-            projectile.ownerPlayerId = this.playerState.id;
-        }
-        
         // Add to scene's projectile list
         if (this.scene.projectiles) {
             this.scene.projectiles.push(projectile);
+        }
+        
+        // Broadcast shoot event to other players (for multiplayer)
+        if (this.isLocal && this.playerState) {
+            this.playerState.setState('lastShot', {
+                timestamp: Date.now(),
+                x: x,
+                y: y,
+                angle: this.body.angle,
+                color: this.playerColor || C.LASER_COLOR
+            }, false); // Use unreliable for fast updates
         }
         
         // Small recoil

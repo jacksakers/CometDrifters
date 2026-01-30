@@ -1,4 +1,5 @@
 import * as C from '../config/constants.js';
+import Projectile from '../entities/Projectile.js';
 
 // Playroom Kit is loaded globally via UMD bundle in game.html
 const { insertCoin, onPlayerJoin, myPlayer, isHost, getState, setState } = window.Playroom;
@@ -179,31 +180,27 @@ export default class MultiplayerManager {
     syncHostState() {
         if (!isHost()) return;
         
+        // Check if managers are ready
+        if (!this.scene.cometManager || !this.scene.alienManager) {
+            console.warn('[Host] Managers not ready yet, skipping sync');
+            return;
+        }
+        
         // Serialize all comets
         const cometData = this.scene.cometManager.serializeComets();
         setState('comets', cometData, false); // Use unreliable for faster sync
         
         // Debug log very rarely
         if (Math.random() < 0.002) { // 0.2% chance to log
-            console.log('[Host] Syncing:', cometData.length, 'comets,', this.scene.alienManager.getAliens().length, 'aliens,', this.scene.projectiles.length, 'projectiles');
+            console.log('[Host] Syncing:', cometData.length, 'comets,', this.scene.alienManager.getAliens().length, 'aliens (projectiles synced via events)');
         }
         
         // Serialize all aliens
         const alienData = this.scene.alienManager.serializeAliens();
         setState('aliens', alienData, false);
         
-        // Serialize all projectiles with unique IDs
-        const projectileData = this.scene.projectiles.map((proj) => ({
-            id: proj.id || `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            x: proj.body.position.x,
-            y: proj.body.position.y,
-            vx: proj.body.velocity.x,
-            vy: proj.body.velocity.y,
-            color: proj.color,
-            owner: proj.owner,
-            ownerPlayerId: proj.ownerPlayerId || this.localPlayerId
-        }));
-        setState('projectiles', projectileData, false);
+        // Note: Projectiles are no longer synced - each client creates them locally
+        // based on shoot events from players and aliens
         
         // Sync world center less frequently to avoid jumps
         // Only update every 10th sync
@@ -245,6 +242,14 @@ export default class MultiplayerManager {
             
             const { ship, playerState } = playerData;
             if (!ship || !ship.alive) continue;
+            
+            // Check for shoot events
+            const lastShot = playerState.getState('lastShot');
+            if (lastShot && (!playerData.lastProcessedShot || lastShot.timestamp > playerData.lastProcessedShot)) {
+                // Create local projectile from remote player's shoot event
+                this.createRemotePlayerProjectile(ship, lastShot);
+                playerData.lastProcessedShot = lastShot.timestamp;
+            }
             
             // Get network state
             const netX = playerState.getState('x');
@@ -291,10 +296,6 @@ export default class MultiplayerManager {
         if (!isHost()) {
             const cometData = getState('comets');
             if (cometData && Array.isArray(cometData)) {
-                // Debug log very rarely
-                if (Math.random() < 0.002) { // 0.2% chance to log
-                    console.log('[Client] Received:', cometData.length, 'comets from host');
-                }
                 this.scene.cometManager.syncFromNetwork(cometData);
             }
             
@@ -304,10 +305,27 @@ export default class MultiplayerManager {
                 this.scene.alienManager.syncFromNetwork(alienData);
             }
             
-            // Sync projectiles from host
-            const projectileData = getState('projectiles');
-            if (projectileData && Array.isArray(projectileData)) {
-                this.scene.syncProjectilesFromNetwork(projectileData);
+            // Listen for alien shoot events from host
+            const alienShots = getState('alienShots');
+            if (alienShots && Array.isArray(alienShots)) {
+                for (const shot of alienShots) {
+                    // Check if we've already processed this shot
+                    if (!this.processedAlienShots) {
+                        this.processedAlienShots = new Set();
+                    }
+                    
+                    const shotKey = `${shot.alienId}_${shot.timestamp}`;
+                    if (!this.processedAlienShots.has(shotKey)) {
+                        this.createAlienProjectile(shot.alienId, shot);
+                        this.processedAlienShots.add(shotKey);
+                        
+                        // Clean up old processed shots (keep last 50)
+                        if (this.processedAlienShots.size > 50) {
+                            const shotsArray = Array.from(this.processedAlienShots);
+                            this.processedAlienShots = new Set(shotsArray.slice(-50));
+                        }
+                    }
+                }
             }
             
             // Sync world center from host (interpolated)
@@ -322,6 +340,50 @@ export default class MultiplayerManager {
                 this.scene.worldCenterY = currentY + (worldCenterY - currentY) * lerpFactor;
             }
         }
+    }
+    
+    /**
+     * Create projectile from remote player's shoot event
+     */
+    createRemotePlayerProjectile(ship, shotData) {
+        const { x, y, angle, color } = shotData;
+        
+        const projectile = new Projectile(
+            this.scene,
+            x, y,
+            angle,
+            {
+                damage: C.PROJECTILE_DAMAGE,
+                speed: C.PROJECTILE_SPEED,
+                lifetime: C.PROJECTILE_LIFETIME,
+                color: color || C.PROJECTILE_COLOR,
+                owner: 'player'
+            }
+        );
+        
+        this.scene.projectiles.push(projectile);
+    }
+    
+    /**
+     * Create projectile from alien shoot event
+     */
+    createAlienProjectile(alienId, shotData) {
+        const { x, y, angle } = shotData;
+        
+        const projectile = new Projectile(
+            this.scene,
+            x, y,
+            angle,
+            {
+                damage: C.ALIEN_PROJECTILE_DAMAGE,
+                speed: C.ALIEN_PROJECTILE_SPEED,
+                lifetime: C.ALIEN_PROJECTILE_LIFETIME,
+                color: C.ALIEN_PROJECTILE_COLOR,
+                owner: 'alien'
+            }
+        );
+        
+        this.scene.projectiles.push(projectile);
     }
     
     /**

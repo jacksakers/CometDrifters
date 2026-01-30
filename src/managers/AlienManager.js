@@ -187,7 +187,15 @@ export default class AlienManager {
                 
                 this.scene.matter.body.setPosition(alien.body, { x: targetX, y: targetY });
                 this.scene.matter.body.setVelocity(alien.body, { x: data.vx, y: data.vy });
-                this.scene.matter.body.setAngle(alien.body, data.rotation);
+                
+                // Smoothly interpolate rotation to avoid jumps
+                let angleDiff = data.rotation - alien.body.angle;
+                // Normalize to -PI to PI range
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                const newAngle = alien.body.angle + angleDiff * 0.15; // Smooth rotation interpolation
+                this.scene.matter.body.setAngle(alien.body, newAngle);
+                
                 alien.health = data.health;
                 alien.isDocked = data.isDocked;
                 alien.aiState = data.aiState;

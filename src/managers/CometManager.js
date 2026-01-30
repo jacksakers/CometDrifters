@@ -318,8 +318,12 @@ export default class CometManager {
                 this.scene.matter.body.setPosition(comet.body, { x: targetX, y: targetY });
                 this.scene.matter.body.setVelocity(comet.body, { x: data.vx, y: data.vy });
                 
-                // Sync rotation
-                comet.rotation = data.rotation;
+                // Smoothly interpolate rotation to avoid jumps
+                let rotationDiff = data.rotation - comet.rotation;
+                // Normalize to -PI to PI range
+                while (rotationDiff > Math.PI) rotationDiff -= Math.PI * 2;
+                while (rotationDiff < -Math.PI) rotationDiff += Math.PI * 2;
+                comet.rotation += rotationDiff * 0.1; // Smooth rotation interpolation
                 comet.rotationSpeed = data.rotationSpeed;
                 
                 // Also sync gravity sensor
