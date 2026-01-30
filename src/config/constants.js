@@ -36,9 +36,26 @@ export const COMET_MIN_VELOCITY_Y = 1.5;
 export const COMET_MAX_VELOCITY_Y = 3.5;
 export const COMET_BASE_SPAWN_RATE = 0.02; // Probability per frame - reduced for better spacing
 export const COMET_SPAWN_INCREASE_RATE = 0.00005; // Increase per score point
+export const MAX_COMETS_ON_SCREEN = 12; // Maximum number of comets at once
+
+// Planet Settings (Large comets)
+export const PLANET_MIN_SIZE = 200;
+export const PLANET_MAX_SIZE = 350;
+export const PLANET_SPAWN_CHANCE = 0.08; // 8% chance a spawn is a planet
+export const PLANET_MIN_VELOCITY = 0.5; // Slower than regular comets
+export const PLANET_MAX_VELOCITY = 1.5;
 export const COMET_COLOR = 0x94a3b8;
 export const COMET_STROKE_COLOR = 0x64748b;
 export const COMET_REMOVAL_BUFFER = 400; // Distance off-screen before removal
+
+// Depth System (for visual layering)
+export const DEPTH_NEAR = 1.0;  // Closest layer (bigger, brighter)
+export const DEPTH_MID = 0.7;   // Middle layer
+export const DEPTH_FAR = 0.4;   // Farthest layer (smaller, dimmer)
+export const SHADOW_OFFSET_X = 5; // Shadow offset for near objects
+export const SHADOW_OFFSET_Y = 5;
+export const SHADOW_ALPHA = 0.3; // Shadow opacity
+export const SHADOW_BLUR = 10;   // Shadow blur radius
 
 // Gravity Well Settings
 export const GRAVITY_WELL_MULTIPLIER = 2.5; // Radius multiplier from comet size
@@ -80,3 +97,7 @@ export const COLLISION_CATEGORIES = {
     SENSOR: 0x0004,
     PROJECTILE: 0x0008
 };
+
+// Comet Physics
+export const COMET_COLLISION_RESTITUTION = 0.6; // Bounciness when comets collide
+export const COMET_COLLISION_FRICTION = 0.1;     // Friction during collision

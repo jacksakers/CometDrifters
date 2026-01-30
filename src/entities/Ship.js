@@ -170,7 +170,11 @@ export default class Ship {
         // Store offset from comet center and angle
         this.dockOffsetX = this.body.position.x - comet.body.position.x;
         this.dockOffsetY = this.body.position.y - comet.body.position.y;
-        this.dockAngleOffset = this.body.angle - Math.atan2(this.dockOffsetY, this.dockOffsetX);
+        this.dockDistance = Math.sqrt(this.dockOffsetX * this.dockOffsetX + this.dockOffsetY * this.dockOffsetY);
+        this.dockAngle = Math.atan2(this.dockOffsetY, this.dockOffsetX);
+        
+        // Store initial comet rotation to track rotation delta
+        this.initialCometRotation = comet.rotation;
         
         // Rotate ship to face outward from comet center
         const angleToCenter = Math.atan2(
@@ -201,20 +205,25 @@ export default class Ship {
     
     /**
      * Maintain docked position and orientation
+     * Rotates ship around comet as the comet rotates
      */
     updateDocking() {
         if (this.isDocked && this.dockedComet) {
-            // Keep ship at fixed offset from comet
-            const targetX = this.dockedComet.body.position.x + this.dockOffsetX;
-            const targetY = this.dockedComet.body.position.y + this.dockOffsetY;
+            // Calculate how much the comet has rotated since docking
+            const cometRotationDelta = this.dockedComet.rotation - this.initialCometRotation;
+            
+            // Rotate the ship's dock position around the comet
+            const newAngle = this.dockAngle + cometRotationDelta;
+            const targetX = this.dockedComet.body.position.x + Math.cos(newAngle) * this.dockDistance;
+            const targetY = this.dockedComet.body.position.y + Math.sin(newAngle) * this.dockDistance;
             
             this.scene.matter.body.setPosition(this.body, { x: targetX, y: targetY });
             this.scene.matter.body.setVelocity(this.body, this.dockedComet.body.velocity);
             
-            // Maintain orientation facing outward from comet center
-            // dockOffsetX/Y is already the vector from comet to ship (outward)
-            const angleToCenter = Math.atan2(this.dockOffsetY, this.dockOffsetX);
-            this.scene.matter.body.setAngle(this.body, angleToCenter);
+            // Rotate ship to face outward (maintaining radial orientation)
+            // The ship's angle should also rotate by the same delta
+            const outwardAngle = newAngle;
+            this.scene.matter.body.setAngle(this.body, outwardAngle);
             
             // Refuel while docked
             this.fuel = Math.min(C.SHIP_MAX_FUEL, this.fuel + C.SHIP_FUEL_REGEN_RATE);

@@ -32,24 +32,41 @@ export default class CometManager {
         const x = camX + Math.cos(angle) * spawnDistance;
         const y = camY + Math.sin(angle) * spawnDistance;
         
-        // Random size
-        const size = C.COMET_MIN_SIZE + 
-                     Math.random() * (C.COMET_MAX_SIZE - C.COMET_MIN_SIZE);
+        // Determine if this should be a planet (large comet)
+        const isPlanet = Math.random() < C.PLANET_SPAWN_CHANCE;
+        
+        // Random size (planet or regular comet)
+        const size = isPlanet ? 
+                     C.PLANET_MIN_SIZE + Math.random() * (C.PLANET_MAX_SIZE - C.PLANET_MIN_SIZE) :
+                     C.COMET_MIN_SIZE + Math.random() * (C.COMET_MAX_SIZE - C.COMET_MIN_SIZE);
+        
+        // Random depth layer (30% near, 30% mid, 40% far)
+        let depth;
+        const depthRoll = Math.random();
+        if (depthRoll < 0.3) {
+            depth = C.DEPTH_NEAR;
+        } else if (depthRoll < 0.6) {
+            depth = C.DEPTH_MID;
+        } else {
+            depth = C.DEPTH_FAR;
+        }
         
         // Velocity: aim toward camera center with slight variation
         const angleToCamera = Math.atan2(camY - y, camX - x);
         const randomness = (Math.random() - 0.5) * 0.6; // +/- 0.3 radians variation
         const velocityAngle = angleToCamera + randomness;
         
-        const speed = C.COMET_MIN_VELOCITY_X + 
-                     Math.random() * (C.COMET_MAX_VELOCITY_X - C.COMET_MIN_VELOCITY_X);
+        // Planets move slower than regular comets
+        const speed = isPlanet ?
+                     C.PLANET_MIN_VELOCITY + Math.random() * (C.PLANET_MAX_VELOCITY - C.PLANET_MIN_VELOCITY) :
+                     C.COMET_MIN_VELOCITY_X + Math.random() * (C.COMET_MAX_VELOCITY_X - C.COMET_MIN_VELOCITY_X);
         
         const velocity = {
             x: Math.cos(velocityAngle) * speed,
             y: Math.sin(velocityAngle) * speed
         };
         
-        const comet = new Comet(this.scene, x, y, size, velocity);
+        const comet = new Comet(this.scene, x, y, size, velocity, depth);
         this.comets.push(comet);
     }
     
@@ -61,8 +78,8 @@ export default class CometManager {
         this.spawnRate = C.COMET_BASE_SPAWN_RATE + 
                         (this.score * C.COMET_SPAWN_INCREASE_RATE);
         
-        // Spawn new comets
-        if (Math.random() < this.spawnRate) {
+        // Only spawn new comets if we're under the limit
+        if (this.comets.length < C.MAX_COMETS_ON_SCREEN && Math.random() < this.spawnRate) {
             this.spawnComet();
         }
         

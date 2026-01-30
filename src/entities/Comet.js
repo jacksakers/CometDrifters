@@ -6,9 +6,14 @@ import * as C from '../config/constants.js';
  * Emits gravitational pull to nearby objects
  */
 export default class Comet {
-    constructor(scene, x, y, size, velocity) {
+    constructor(scene, x, y, size, velocity, depth = null) {
         this.scene = scene;
         this.radius = size;
+        
+        // Depth for visual layering (1.0 = near, 0.4 = far)
+        this.depth = depth !== null ? depth : 
+            (Math.random() < 0.3 ? C.DEPTH_NEAR : 
+             Math.random() < 0.6 ? C.DEPTH_MID : C.DEPTH_FAR);
         
         // Create irregular shape for visual variety
         this.createIrregularShape(x, y);
@@ -60,13 +65,13 @@ export default class Comet {
         }
         
         this.body = this.scene.matter.add.fromVertices(x, y, vertices, {
-            friction: 0,
+            friction: C.COMET_COLLISION_FRICTION,
             frictionAir: 0,
-            restitution: 0.8,
+            restitution: C.COMET_COLLISION_RESTITUTION,
             isStatic: false,
             collisionFilter: {
                 category: C.COLLISION_CATEGORIES.COMET,
-                mask: C.COLLISION_CATEGORIES.SHIP
+                mask: C.COLLISION_CATEGORIES.SHIP | C.COLLISION_CATEGORIES.COMET // Allow comet collisions
             }
         });
         
@@ -135,7 +140,7 @@ export default class Comet {
     }
     
     /**
-     * Draw the comet
+     * Draw the comet with depth-based shadows and visual cues
      */
     draw() {
         this.graphics.clear();
@@ -143,42 +148,87 @@ export default class Comet {
         const x = this.body.position.x;
         const y = this.body.position.y;
         
-        // Debug: Draw gravity well (optional - comment out for production)
-        // this.graphics.lineStyle(1, 0x4ade80, 0.2);
-        // this.graphics.strokeCircle(x, y, this.gravityWellRadius);
+        // Calculate visual properties based on depth
+        const scale = 0.7 + (this.depth * 0.3); // Near objects appear slightly bigger
+        const alpha = 0.6 + (this.depth * 0.4);  // Near objects are brighter
+        const strokeAlpha = 0.5 + (this.depth * 0.5);
+        
+        // Draw shadow for near objects
+        if (this.depth >= C.DEPTH_MID) {
+            const shadowOffsetX = C.SHADOW_OFFSET_X * this.depth;
+            const shadowOffsetY = C.SHADOW_OFFSET_Y * this.depth;
+            const shadowAlpha = C.SHADOW_ALPHA * this.depth;
+            
+            this.graphics.save();
+            this.graphics.translateCanvas(x + shadowOffsetX, y + shadowOffsetY);
+            this.graphics.rotateCanvas(this.rotation);
+            
+            // Shadow shape
+            this.graphics.fillStyle(0x000000, shadowAlpha);
+            this.graphics.beginPath();
+            if (this.vertices.length > 0) {
+                const sx = this.vertices[0].x * scale;
+                const sy = this.vertices[0].y * scale;
+                this.graphics.moveTo(sx, sy);
+                for (let i = 1; i < this.vertices.length; i++) {
+                    const vx = this.vertices[i].x * scale;
+                    const vy = this.vertices[i].y * scale;
+                    this.graphics.lineTo(vx, vy);
+                }
+            }
+            this.graphics.closePath();
+            this.graphics.fillPath();
+            
+            this.graphics.restore();
+        }
         
         // Draw comet body
         this.graphics.save();
         this.graphics.translateCanvas(x, y);
         this.graphics.rotateCanvas(this.rotation);
         
-        // Main body
-        this.graphics.fillStyle(C.COMET_COLOR, 1);
-        this.graphics.lineStyle(2, C.COMET_STROKE_COLOR, 1);
+        // Main body with depth-based alpha
+        this.graphics.fillStyle(C.COMET_COLOR, alpha);
+        this.graphics.lineStyle(2, C.COMET_STROKE_COLOR, strokeAlpha);
         
         this.graphics.beginPath();
         if (this.vertices.length > 0) {
-            this.graphics.moveTo(this.vertices[0].x, this.vertices[0].y);
+            const vx = this.vertices[0].x * scale;
+            const vy = this.vertices[0].y * scale;
+            this.graphics.moveTo(vx, vy);
             for (let i = 1; i < this.vertices.length; i++) {
-                this.graphics.lineTo(this.vertices[i].x, this.vertices[i].y);
+                const sx = this.vertices[i].x * scale;
+                const sy = this.vertices[i].y * scale;
+                this.graphics.lineTo(sx, sy);
             }
         }
         this.graphics.closePath();
         this.graphics.fillPath();
         this.graphics.strokePath();
         
-        // Crater details
-        this.graphics.fillStyle(0x000000, 0.3);
+        // Crater details (more visible on near objects)
+        const craterAlpha = 0.2 + (this.depth * 0.15);
+        this.graphics.fillStyle(0x000000, craterAlpha);
         this.graphics.fillCircle(
-            this.radius * 0.3, 
-            this.radius * 0.2, 
-            this.radius * 0.2
+            this.radius * 0.3 * scale, 
+            this.radius * 0.2 * scale, 
+            this.radius * 0.2 * scale
         );
         this.graphics.fillCircle(
-            -this.radius * 0.2, 
-            -this.radius * 0.3, 
-            this.radius * 0.15
+            -this.radius * 0.2 * scale, 
+            -this.radius * 0.3 * scale, 
+            this.radius * 0.15 * scale
         );
+        
+        // Highlight for near objects (adds rim lighting effect)
+        if (this.depth >= C.DEPTH_NEAR) {
+            this.graphics.lineStyle(1, 0xffffff, 0.3);
+            this.graphics.strokeCircle(
+                -this.radius * 0.2 * scale,
+                -this.radius * 0.2 * scale,
+                this.radius * 0.4 * scale
+            );
+        }
         
         this.graphics.restore();
     }
