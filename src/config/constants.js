@@ -34,7 +34,7 @@ export const COMET_MIN_VELOCITY_X = 1;
 export const COMET_MAX_VELOCITY_X = 3;
 export const COMET_MIN_VELOCITY_Y = 1.5;
 export const COMET_MAX_VELOCITY_Y = 3.5;
-export const COMET_BASE_SPAWN_RATE = 0.02; // Probability per frame - reduced for better spacing
+export const COMET_BASE_SPAWN_RATE = 0.04; // Probability per frame - reduced for better spacing
 export const COMET_SPAWN_INCREASE_RATE = 0.00005; // Increase per score point
 export const MAX_COMETS_ON_SCREEN = 12; // Maximum number of comets at once
 

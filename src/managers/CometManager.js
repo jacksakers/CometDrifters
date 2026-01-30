@@ -71,6 +71,85 @@ export default class CometManager {
     }
     
     /**
+     * Spawn comets ahead of player's direction of travel
+     * Ensures there are obstacles when player jets forward quickly
+     */
+    spawnAheadOfPlayer(ship) {
+        if (!ship || !ship.alive) return;
+        
+        // Only spawn ahead if player is moving fast enough
+        const speed = Math.sqrt(
+            ship.body.velocity.x * ship.body.velocity.x + 
+            ship.body.velocity.y * ship.body.velocity.y
+        );
+        
+        if (speed < 1) return; // Not moving fast enough to need ahead spawning
+        
+        // Calculate player's direction of travel
+        const travelAngle = Math.atan2(ship.body.velocity.y, ship.body.velocity.x);
+        
+        // Spawn 2-3 comets ahead of player
+        const spawnCount = 2 + Math.floor(Math.random() * 2); // 2-3 comets
+        
+        for (let i = 0; i < spawnCount; i++) {
+            // Spawn distance: far ahead (1500-2500 pixels)
+            const spawnDistance = 1500 + Math.random() * 1000;
+            
+            // Add some spread angle to create a "field" ahead
+            const spreadAngle = (Math.random() - 0.5) * Math.PI * 0.8; // +/- 72 degrees
+            const finalAngle = travelAngle + spreadAngle;
+            
+            // Spawn position ahead of player
+            const x = ship.body.position.x + Math.cos(finalAngle) * spawnDistance;
+            const y = ship.body.position.y + Math.sin(finalAngle) * spawnDistance;
+            
+            // Random comet properties
+            const isPlanet = Math.random() < C.PLANET_SPAWN_CHANCE;
+            const size = isPlanet ? 
+                         C.PLANET_MIN_SIZE + Math.random() * (C.PLANET_MAX_SIZE - C.PLANET_MIN_SIZE) :
+                         C.COMET_MIN_SIZE + Math.random() * (C.COMET_MAX_SIZE - C.COMET_MIN_SIZE);
+            
+            // Random depth
+            let depth;
+            const depthRoll = Math.random();
+            if (depthRoll < 0.3) {
+                depth = C.DEPTH_NEAR;
+            } else if (depthRoll < 0.6) {
+                depth = C.DEPTH_MID;
+            } else {
+                depth = C.DEPTH_FAR;
+            }
+            
+            // Velocity: mostly stationary or slow drift to create obstacles
+            // Some chance of moving toward player path for intersect
+            let velocity;
+            if (Math.random() < 0.4) {
+                // Stationary/slow drift
+                velocity = {
+                    x: (Math.random() - 0.5) * 1,
+                    y: (Math.random() - 0.5) * 1
+                };
+            } else {
+                // Moving to intersect player's path
+                const angleToPlayer = Math.atan2(
+                    ship.body.position.y - y,
+                    ship.body.position.x - x
+                );
+                const speed = isPlanet ?
+                             C.PLANET_MIN_VELOCITY + Math.random() * (C.PLANET_MAX_VELOCITY - C.PLANET_MIN_VELOCITY) :
+                             1 + Math.random() * 2;
+                velocity = {
+                    x: Math.cos(angleToPlayer) * speed,
+                    y: Math.sin(angleToPlayer) * speed
+                };
+            }
+            
+            const comet = new Comet(this.scene, x, y, size, velocity, depth);
+            this.comets.push(comet);
+        }
+    }
+    
+    /**
      * Update all comets and handle spawning
      */
     update(ship) {
@@ -81,6 +160,12 @@ export default class CometManager {
         // Only spawn new comets if we're under the limit
         if (this.comets.length < C.MAX_COMETS_ON_SCREEN && Math.random() < this.spawnRate) {
             this.spawnComet();
+        }
+        
+        // Spawn comets ahead of fast-moving player (less frequently)
+        // Check every 30 frames to avoid over-spawning
+        if (ship && this.scene.game.loop.frame % 30 === 0 && this.comets.length < C.MAX_COMETS_ON_SCREEN - 2) {
+            this.spawnAheadOfPlayer(ship);
         }
         
         // Update existing comets
