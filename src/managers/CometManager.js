@@ -187,10 +187,7 @@ export default class CometManager {
             
             // Only remove when VERY far (3000 pixels from camera)
             if (distanceFromCamera > 3000) {
-                // Award points for comet passing by
-                this.score += C.COMET_DODGE_SCORE;
-                this.scene.events.emit('scoreChanged', this.score);
-                
+                // No points awarded for dodging - points come from docking now
                 comet.destroy();
                 this.comets.splice(i, 1);
             }

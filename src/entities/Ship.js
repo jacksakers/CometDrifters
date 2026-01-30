@@ -32,6 +32,7 @@ export default class Ship {
         this.isDocked = false;
         this.dockedComet = null;
         this.alive = true;
+        this.dockedTime = 0; // Track time docked for scoring
         
         // Thrust particles trail (Phaser 3.60+ API)
         this.thrustEmitter = null; // Will be created when needed
@@ -160,6 +161,7 @@ export default class Ship {
     dock(comet) {
         this.isDocked = true;
         this.dockedComet = comet;
+        this.dockedTime = 0; // Reset docked timer
         
         // Match comet velocity
         this.scene.matter.body.setVelocity(this.body, {
@@ -227,6 +229,12 @@ export default class Ship {
             
             // Refuel while docked
             this.fuel = Math.min(C.SHIP_MAX_FUEL, this.fuel + C.SHIP_FUEL_REGEN_RATE);
+            
+            // Award score while docked (every 10 frames = 1 point)
+            this.dockedTime++;
+            if (this.dockedTime % 10 === 0) {
+                this.scene.events.emit('dockedScore', 1);
+            }
         }
     }
     

@@ -67,9 +67,11 @@ export default class GameScene extends Phaser.Scene {
         // Listen for ship destruction
         this.events.on('shipDestroyed', this.onShipDestroyed, this);
         
-        // Listen for score changes
-        this.events.on('scoreChanged', (score) => {
-            this.events.emit('updateScore', score);
+        // Listen for score changes from docking
+        this.events.on('dockedScore', (points) => {
+            const newScore = this.cometManager.score + points;
+            this.cometManager.score = newScore;
+            this.events.emit('updateScore', newScore);
         });
         
         // Emit initial fuel update
