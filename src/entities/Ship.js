@@ -207,6 +207,9 @@ export default class Ship {
         this.dockedComet = comet;
         this.dockedTime = 0; // Reset docked timer
         
+        // Disable collision with docked comet to prevent physics glitches
+        this.body.collisionFilter.mask = C.COLLISION_CATEGORIES.ALIEN_PROJECTILE;
+        
         // Match comet velocity
         this.scene.matter.body.setVelocity(this.body, {
             x: comet.body.velocity.x,
@@ -237,6 +240,9 @@ export default class Ship {
      */
     undock() {
         if (!this.isDocked) return;
+        
+        // Re-enable collision with comets
+        this.body.collisionFilter.mask = C.COLLISION_CATEGORIES.COMET | C.COLLISION_CATEGORIES.ALIEN_PROJECTILE;
         
         // Inherit comet's velocity plus a small push
         const pushAngle = this.body.angle;

@@ -19,17 +19,22 @@ export default class Projectile {
         this.alive = true;
         
         // Create projectile body
+        // Note: NOT a sensor - needs to be a real body to collide with comets properly
+        // We make it non-physical by setting very small mass and making it ignore forces
         this.body = scene.matter.add.circle(x, y, C.PROJECTILE_RADIUS, {
-            isSensor: true, // Pass through but detect collisions
+            isSensor: false, // Real body to properly collide with comets
             friction: 0,
             frictionAir: 0,
+            frictionStatic: 0,
+            restitution: 0,
+            mass: 0.00001, // Extremely light so it doesn't affect other objects
             collisionFilter: {
                 category: this.owner === 'player' ? 
                     C.COLLISION_CATEGORIES.PROJECTILE : 
                     C.COLLISION_CATEGORIES.ALIEN_PROJECTILE,
                 mask: this.owner === 'player' ? 
-                    C.COLLISION_CATEGORIES.ALIEN : 
-                    C.COLLISION_CATEGORIES.SHIP
+                    (C.COLLISION_CATEGORIES.ALIEN | C.COLLISION_CATEGORIES.COMET) : 
+                    (C.COLLISION_CATEGORIES.SHIP | C.COLLISION_CATEGORIES.COMET)
             }
         });
         
@@ -37,6 +42,9 @@ export default class Projectile {
         const vx = Math.cos(angle) * this.speed;
         const vy = Math.sin(angle) * this.speed;
         scene.matter.body.setVelocity(this.body, { x: vx, y: vy });
+        
+        // Disable gravity and other forces on projectile
+        this.body.ignoreGravity = true;
         
         // Store reference on body
         this.body.projectileRef = this;
@@ -53,6 +61,20 @@ export default class Projectile {
      * Update projectile
      */
     update() {
+        
+        // Maintain constant velocity (prevent physics from slowing it down)
+        const currentSpeed = Math.sqrt(
+            this.body.velocity.x * this.body.velocity.x + 
+            this.body.velocity.y * this.body.velocity.y
+        );
+        
+        if (currentSpeed > 0 && Math.abs(currentSpeed - this.speed) > 0.1) {
+            const scale = this.speed / currentSpeed;
+            this.scene.matter.body.setVelocity(this.body, {
+                x: this.body.velocity.x * scale,
+                y: this.body.velocity.y * scale
+            });
+        }
         if (!this.alive) return;
         
         this.age++;

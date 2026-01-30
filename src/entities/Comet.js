@@ -71,9 +71,12 @@ export default class Comet {
             isStatic: false,
             collisionFilter: {
                 category: C.COLLISION_CATEGORIES.COMET,
-                mask: C.COLLISION_CATEGORIES.SHIP | C.COLLISION_CATEGORIES.COMET // Allow comet collisions
+                mask: C.COLLISION_CATEGORIES.SHIP | C.COLLISION_CATEGORIES.COMET | C.COLLISION_CATEGORIES.PROJECTILE | C.COLLISION_CATEGORIES.ALIEN_PROJECTILE
             }
         });
+        
+        // Store reference on body for collision detection
+        this.body.cometRef = this;
         
         // Store vertices for drawing
         this.vertices = vertices;

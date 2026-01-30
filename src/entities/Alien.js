@@ -380,6 +380,9 @@ export default class Alien {
         this.dockedComet = comet;
         this.aiState = 'dock';
         
+        // Disable collision with docked comet to prevent physics glitches
+        this.body.collisionFilter.mask = C.COLLISION_CATEGORIES.PROJECTILE;
+        
         // Match comet velocity
         this.scene.matter.body.setVelocity(this.body, {
             x: comet.body.velocity.x,
@@ -413,6 +416,9 @@ export default class Alien {
      */
     undock() {
         if (!this.isDocked) return;
+        
+        // Re-enable collision with comets
+        this.body.collisionFilter.mask = C.COLLISION_CATEGORIES.COMET | C.COLLISION_CATEGORIES.PROJECTILE;
         
         // Push away
         const pushAngle = this.body.angle;

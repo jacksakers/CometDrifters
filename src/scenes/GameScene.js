@@ -126,6 +126,9 @@ export default class GameScene extends Phaser.Scene {
                 
                 // Check alien projectile-ship collisions
                 this.handleAlienProjectileShipCollision(bodyA, bodyB);
+                
+                // Check projectile-comet collisions
+                this.handleProjectileCometCollision(bodyA, bodyB);
             });
         });
     }
@@ -153,6 +156,19 @@ export default class GameScene extends Phaser.Scene {
         if (projectile && ship && projectile.owner === 'alien' && ship.alive) {
             ship.takeDamage(projectile.damage);
             projectile.hit(ship);
+        }
+    }
+    
+    /**
+     * Handle projectile hitting comet
+     */
+    handleProjectileCometCollision(bodyA, bodyB) {
+        const projectile = bodyA.projectileRef || bodyB.projectileRef;
+        const comet = bodyA.cometRef || bodyB.cometRef;
+        
+        if (projectile && comet && projectile.alive) {
+            // Projectile is blocked by comet
+            projectile.hit(comet);
         }
     }
     
