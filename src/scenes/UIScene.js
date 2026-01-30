@@ -26,6 +26,7 @@ export default class UIScene extends Phaser.Scene {
         this.gameScene.events.on('updateHealth', this.updateHealth, this);
         this.gameScene.events.on('updateLaserCharge', this.updateLaserCharge, this);
         this.gameScene.events.on('updateDockStatus', this.updateDockStatus, this);
+        this.gameScene.events.on('lockOnTarget', this.updateLockOn, this);
         this.gameScene.events.on('gameOver', this.showGameOver, this);
         this.gameScene.events.on('gameReset', this.hideGameOver, this);
     }
@@ -202,6 +203,32 @@ export default class UIScene extends Phaser.Scene {
                 alpha: 0.3
             }
         ).setOrigin(0.5);
+        
+        // Lock-On Indicator (centered at top)
+        this.lockOnIndicator = this.add.text(
+            C.GAME_WIDTH / 2,
+            C.UI_PADDING,
+            '\u25c4 LOCKED ON \u25ba',
+            {
+                fontFamily: C.UI_FONT_FAMILY,
+                fontSize: '16px',
+                color: '#ff0000',
+                fontStyle: 'bold',
+                stroke: '#000000',
+                strokeThickness: 3
+            }
+        ).setOrigin(0.5, 0).setVisible(false);
+        
+        // Pulsing animation for lock-on
+        this.lockOnTween = this.tweens.add({
+            targets: this.lockOnIndicator,
+            alpha: { from: 1, to: 0.4 },
+            scale: { from: 1, to: 1.1 },
+            duration: 500,
+            yoyo: true,
+            repeat: -1,
+            paused: true
+        });
     }
     
     /**
@@ -259,7 +286,7 @@ export default class UIScene extends Phaser.Scene {
         this.controlsText = this.add.text(
             C.GAME_WIDTH / 2, 
             C.GAME_HEIGHT - 10, 
-            'Arrow Keys: Move | S: Dock | Z: Laser | X: Special (Empty) | ESC: Reset', 
+            'Arrow Keys: Move | S: Dock | Z: Laser | SHIFT: Lock-On | ESC: Reset', 
             {
                 fontFamily: C.UI_FONT_FAMILY,
                 fontSize: '11px',
@@ -487,6 +514,21 @@ export default class UIScene extends Phaser.Scene {
         } else {
             this.laserBar.setFillStyle(0x004488); // Dark blue
             this.laserBar.setAlpha(0.6);
+        }
+    }
+    
+    /**
+     * Update lock-on indicator
+     */
+    updateLockOn(target) {
+        if (target) {
+            // Show lock-on indicator
+            this.lockOnIndicator.setVisible(true);
+            this.lockOnTween.resume();
+        } else {
+            // Hide lock-on indicator
+            this.lockOnIndicator.setVisible(false);
+            this.lockOnTween.pause();
         }
     }
     

@@ -213,7 +213,7 @@ export default class GameScene extends Phaser.Scene {
         
         // Update ship
         if (this.ship && this.ship.alive) {
-            this.ship.update(inputState, this.cometManager.getComets());
+            this.ship.update(inputState, this.cometManager.getComets(), this.alienManager.getAliens());
             
             // Manually update camera to follow ship with smooth lerp
             const targetX = this.ship.body.position.x - C.GAME_WIDTH / 2;

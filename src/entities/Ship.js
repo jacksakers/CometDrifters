@@ -45,6 +45,9 @@ export default class Ship {
         this.isCharging = false;
         this.invulnerableTimer = 0; // Temporary invulnerability after hit
         
+        // Lock-on targeting
+        this.lockedTarget = null; // Currently locked alien
+        
         // Thrust particles trail (Phaser 3.60+ API)
         this.thrustEmitter = null; // Will be created when needed
     }
@@ -92,10 +95,40 @@ export default class Ship {
     /**
      * Rotate ship left or right
      * Uses "snappy" rotation (not physics-based) for easier control
+     * If locked onto target, auto-rotates toward it
      */
     rotate(inputState) {
         if (!this.alive) return;
         
+        // If locked on, auto-rotate toward target
+        if (this.lockedTarget && this.lockedTarget.alive) {
+            const dx = this.lockedTarget.body.position.x - this.body.position.x;
+            const dy = this.lockedTarget.body.position.y - this.body.position.y;
+            const targetAngle = Math.atan2(dy, dx);
+            
+            let angleDiff = targetAngle - this.body.angle;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            
+            // Rotate toward target
+            if (Math.abs(angleDiff) > 0.05) {
+                const rotationSpeed = C.SHIP_ROTATION_SPEED * 1.5; // Slightly faster for lock-on
+                if (angleDiff > 0) {
+                    this.scene.matter.body.setAngle(
+                        this.body,
+                        this.body.angle + Math.min(rotationSpeed, angleDiff)
+                    );
+                } else {
+                    this.scene.matter.body.setAngle(
+                        this.body,
+                        this.body.angle + Math.max(-rotationSpeed, angleDiff)
+                    );
+                }
+            }
+            return;
+        }
+        
+        // Manual rotation
         if (inputState.rotateLeft) {
             this.scene.matter.body.setAngle(
                 this.body, 
@@ -250,10 +283,93 @@ export default class Ship {
     }
     
     /**
+     * Update lock-on targeting
+     */
+    updateLockOn(inputState, aliens) {
+        if (!inputState.lockOn) {
+            // Clear lock when Shift released
+            if (this.lockedTarget) {
+                this.lockedTarget = null;
+                this.scene.events.emit('lockOnTarget', null);
+            }
+            return;
+        }
+        
+        // Check if current target is still valid
+        if (this.lockedTarget && (!this.lockedTarget.alive || this.isTargetTooFar(this.lockedTarget))) {
+            this.lockedTarget = null;
+            this.scene.events.emit('lockOnTarget', null);
+        }
+        
+        // Find new target if we don't have one
+        if (!this.lockedTarget && aliens && aliens.length > 0) {
+            this.lockedTarget = this.findBestTarget(aliens);
+            if (this.lockedTarget) {
+                this.scene.events.emit('lockOnTarget', this.lockedTarget);
+            }
+        }
+    }
+    
+    /**
+     * Find best target to lock onto (closest in facing direction)
+     */
+    findBestTarget(aliens) {
+        let bestTarget = null;
+        let bestScore = -Infinity;
+        const maxLockDistance = 800; // Maximum lock-on distance
+        const facingCone = Math.PI / 3; // 60 degree cone in front
+        
+        for (let alien of aliens) {
+            if (!alien.alive) continue;
+            
+            const dx = alien.body.position.x - this.body.position.x;
+            const dy = alien.body.position.y - this.body.position.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Too far away
+            if (distance > maxLockDistance) continue;
+            
+            // Check if in facing direction
+            const angleToTarget = Math.atan2(dy, dx);
+            let angleDiff = angleToTarget - this.body.angle;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            
+            // Not in facing cone
+            if (Math.abs(angleDiff) > facingCone) continue;
+            
+            // Score based on distance and angle (closer and more centered = better)
+            const angleScore = 1 - (Math.abs(angleDiff) / facingCone);
+            const distanceScore = 1 - (distance / maxLockDistance);
+            const score = angleScore * 0.7 + distanceScore * 0.3;
+            
+            if (score > bestScore) {
+                bestScore = score;
+                bestTarget = alien;
+            }
+        }
+        
+        return bestTarget;
+    }
+    
+    /**
+     * Check if target is too far away
+     */
+    isTargetTooFar(target) {
+        const dx = target.body.position.x - this.body.position.x;
+        const dy = target.body.position.y - this.body.position.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        return distance > 1000; // Lose lock if target gets too far
+    }
+    
+    /**
      * Main update loop
      */
-    update(inputState, comets) {
+    update(inputState, comets, aliens) {
         if (!this.alive) return;
+        
+        // Update lock-on targeting
+        this.updateLockOn(inputState, aliens);
         
         // Update invulnerability timer
         if (this.invulnerableTimer > 0) {

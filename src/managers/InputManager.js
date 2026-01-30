@@ -17,7 +17,8 @@ export default class InputManager {
             dock: false,
             brake: false,
             shoot: false,
-            special: false
+            special: false,
+            lockOn: false
         };
         
         // Setup keyboard input
@@ -29,6 +30,7 @@ export default class InputManager {
         this.spaceKey = scene.input.keyboard.addKey('SPACE');
         this.zKey = scene.input.keyboard.addKey('Z');
         this.xKey = scene.input.keyboard.addKey('X');
+        this.shiftKey = scene.input.keyboard.addKey('SHIFT');
         
         // Touch controls
         this.touchActive = false;
@@ -76,7 +78,8 @@ export default class InputManager {
             dock: false,
             brake: false,
             shoot: false,
-            special: false
+            special: false,
+            lockOn: false
         };
         
         // Keyboard input
@@ -121,6 +124,11 @@ export default class InputManager {
         
         if (this.xKey.isDown) {
             this.state.special = true;
+        }
+        
+        // Lock-on targeting
+        if (this.shiftKey.isDown) {
+            this.state.lockOn = true;
         }
     }
     
