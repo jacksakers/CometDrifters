@@ -362,20 +362,17 @@ export default class CometManager {
                 // Interpolate position for smooth movement
                 const currentX = comet.body.position.x;
                 const currentY = comet.body.position.y;
-                const lerpFactor = 0.15;
+                const lerpFactor = 0.05; // More aggressive smoothing
                 const targetX = currentX + (data.x - currentX) * lerpFactor;
                 const targetY = currentY + (data.y - currentY) * lerpFactor;
                 
                 this.scene.matter.body.setPosition(comet.body, { x: targetX, y: targetY });
                 this.scene.matter.body.setVelocity(comet.body, { x: data.vx, y: data.vy });
                 
-                // Smoothly interpolate rotation to avoid jumps
-                let rotationDiff = data.rotation - comet.rotation;
-                // Normalize to -PI to PI range
-                while (rotationDiff > Math.PI) rotationDiff -= Math.PI * 2;
-                while (rotationDiff < -Math.PI) rotationDiff += Math.PI * 2;
-                comet.rotation += rotationDiff * 0.1; // Smooth rotation interpolation
-                comet.rotationSpeed = data.rotationSpeed;
+                // Smoothly interpolate rotation speed (rotation will follow naturally)
+                // This avoids jumpy rotation by gradually adjusting the spin rate
+                const rotationSpeedLerp = 0.01; // Very aggressive smoothing for butter-smooth rotation
+                comet.rotationSpeed += (data.rotationSpeed - comet.rotationSpeed) * rotationSpeedLerp;
                 
                 // Also sync gravity sensor
                 this.scene.matter.body.setPosition(comet.gravitySensor, { x: targetX, y: targetY });
