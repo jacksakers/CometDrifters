@@ -17,12 +17,13 @@ export const SHIP_FRICTION = 0; // Zero friction for true zero-g
 export const SHIP_FRICTIONAIR = 0.01; // Very slight air resistance for control
 export const SHIP_RESTITUTION = 0.3; // Bounce off walls
 export const SHIP_THRUST_FORCE = 0.0015; // Force applied when thrusting
-export const SHIP_ROTATION_SPEED = 0.08; // Radians per frame
+export const SHIP_ROTATION_SPEED = 0.13; // Radians per frame
 export const SHIP_MAX_VELOCITY = 12; // Maximum speed cap
 export const SHIP_START_FUEL = 100;
 export const SHIP_MAX_FUEL = 100;
 export const SHIP_FUEL_CONSUMPTION = 0.2; // Fuel used per thrust frame
 export const SHIP_FUEL_REGEN_RATE = 0.15; // Fuel gained per frame while docked
+export const SHIP_PASSIVE_FUEL_REGEN_RATE = 0.10; // Fuel gained per frame while not thrusting
 export const SHIP_COLOR = 0x3b82f6;
 export const SHIP_STROKE_COLOR = 0x1e40af;
 

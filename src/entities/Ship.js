@@ -413,10 +413,8 @@ export default class Ship {
                 const speed = Math.sqrt(
                     this.body.velocity.x ** 2 + this.body.velocity.y ** 2
                 );
-                if (speed < 0.5) {
-                    // Very slow regeneration when drifting slowly
-                    this.fuel = Math.min(C.SHIP_MAX_FUEL, this.fuel + 0.02);
-                }
+                // Very slow regeneration 
+                this.fuel = Math.min(C.SHIP_MAX_FUEL, this.fuel + C.SHIP_PASSIVE_FUEL_REGEN_RATE);
             }
         }
         
