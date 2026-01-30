@@ -6,11 +6,14 @@ import Projectile from './Projectile.js';
  * Can fly around, dock to comets, and shoot at player
  */
 export default class Alien {
-    constructor(scene, x, y) {
+    constructor(scene, x, y, ownerId = null) {
         this.scene = scene;
         
         // Generate unique ID for network sync
         this.id = `alien_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Track which player spawned this alien (for distributed spawning)
+        this.ownerId = ownerId;
         
         // Create alien body with Matter.js
         this.body = scene.matter.add.circle(x, y, C.ALIEN_SIZE, {
@@ -317,25 +320,31 @@ export default class Alien {
             this.scene.projectiles.push(projectile);
         }
         
-        // Broadcast shoot event for multiplayer (only host broadcasts alien shoots)
-        const { isHost, setState } = window.Playroom;
-        if (isHost && this.scene.multiplayerManager && this.scene.multiplayerManager.isMultiplayerActive()) {
-            // Get current alien shots array or initialize
-            const currentShots = window.Playroom.getState('alienShots') || [];
+        // Broadcast shoot event for multiplayer
+        // Each player broadcasts shots from their owned aliens
+        if (this.scene.multiplayerManager && this.scene.multiplayerManager.isMultiplayerActive()) {
+            const { myPlayer } = window.Playroom;
+            const me = myPlayer();
             
-            // Add new shot event
-            const shotEvent = {
-                alienId: this.id,
-                timestamp: Date.now(),
-                x: x,
-                y: y,
-                angle: shootAngle
-            };
-            
-            // Keep only recent shots (last 10 shots to avoid memory buildup)
-            const recentShots = [...currentShots, shotEvent].slice(-10);
-            
-            setState('alienShots', recentShots, false); // Use unreliable for fast updates
+            // Only broadcast if this alien is owned by the local player
+            if (me && this.ownerId === this.scene.multiplayerManager.localPlayerId) {
+                // Get current alien shots from player state or initialize
+                const currentShots = me.getState('alienShots') || [];
+                
+                // Add new shot event
+                const shotEvent = {
+                    alienId: this.id,
+                    timestamp: Date.now(),
+                    x: x,
+                    y: y,
+                    angle: shootAngle
+                };
+                
+                // Keep only recent shots (last 10 shots to avoid memory buildup)
+                const recentShots = [...currentShots, shotEvent].slice(-10);
+                
+                me.setState('alienShots', recentShots, false); // Use unreliable for fast updates
+            }
         }
     }
     
@@ -507,9 +516,17 @@ export default class Alien {
     update(player, comets) {
         if (!this.alive) return;
         
-        // Only host runs AI logic, clients just render
-        const { isHost } = window.Playroom;
-        if (isHost()) {
+        // Only owner runs AI logic for their aliens, others just render
+        const isLocallyOwned = this.scene.multiplayerManager && 
+                              this.scene.multiplayerManager.isMultiplayerActive() &&
+                              this.ownerId === this.scene.multiplayerManager.localPlayerId;
+        
+        // In single player, always run AI
+        const shouldRunAI = !this.scene.multiplayerManager || 
+                           !this.scene.multiplayerManager.isMultiplayerActive() || 
+                           isLocallyOwned;
+        
+        if (shouldRunAI) {
             if (this.isDocked) {
                 this.updateDocking();
             } else {

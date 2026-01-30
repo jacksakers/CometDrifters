@@ -22,8 +22,9 @@ export default class AlienManager {
     
     /**
      * Spawn alien near active players
+     * Each player spawns their own aliens and broadcasts to others
      */
-    spawnAlien() {
+    spawnAlien(ownerId = null) {
         // Don't spawn if at max
         if (this.aliens.length >= C.MAX_ALIENS) return;
         
@@ -69,21 +70,43 @@ export default class AlienManager {
         const x = centerX + Math.cos(angle) * spawnDistance;
         const y = centerY + Math.sin(angle) * spawnDistance;
         
-        const alien = new Alien(this.scene, x, y);
+        const alien = new Alien(this.scene, x, y, ownerId);
         this.aliens.push(alien);
+        
+        // Broadcast alien spawn to other players if in multiplayer
+        if (this.scene.multiplayerManager && this.scene.multiplayerManager.isMultiplayerActive()) {
+            this.scene.multiplayerManager.broadcastAlienSpawn(alien);
+        }
+        
+        return alien;
     }
     
     /**
      * Update all aliens
+     * In multiplayer, only spawn aliens for local player
      */
     update(player, comets) {
-        // Update spawn timer
-        this.spawnTimer++;
+        // Get local player ID if in multiplayer
+        const isMultiplayer = this.scene.multiplayerManager && this.scene.multiplayerManager.isMultiplayerActive();
+        const localPlayerId = isMultiplayer ? this.scene.multiplayerManager.localPlayerId : null;
         
-        if (this.spawnTimer >= this.nextSpawnTime) {
-            this.spawnAlien();
-            this.spawnTimer = 0;
-            this.nextSpawnTime = this.getNextSpawnTime();
+        // Debug log occasionally
+        if (isMultiplayer && Math.random() < 0.001) {
+            console.log('[AlienManager] Update - localPlayerId:', localPlayerId, 'alien count:', this.aliens.length);
+        }
+        
+        // Update spawn timer - only spawn for local player in multiplayer
+        // In single player, player is the local ship
+        const shouldSpawn = !isMultiplayer || (player && player.isLocal);
+        
+        if (shouldSpawn) {
+            this.spawnTimer++;
+            
+            if (this.spawnTimer >= this.nextSpawnTime) {
+                this.spawnAlien(localPlayerId);
+                this.spawnTimer = 0;
+                this.nextSpawnTime = this.getNextSpawnTime();
+            }
         }
         
         // Update each alien
@@ -149,6 +172,7 @@ export default class AlienManager {
     serializeAliens() {
         return this.aliens.map((alien) => ({
             id: alien.id,
+            ownerId: alien.ownerId,
             x: alien.body.position.x,
             y: alien.body.position.y,
             vx: alien.body.velocity.x,
@@ -158,6 +182,28 @@ export default class AlienManager {
             isDocked: alien.isDocked,
             aiState: alien.aiState
         }));
+    }
+    
+    /**
+     * Create an alien from network data (when remote player spawns one)
+     */
+    createAlienFromNetwork(data) {
+        // Check if alien already exists
+        const existingAlien = this.aliens.find(a => a.id === data.id);
+        if (existingAlien) return;
+        
+        const alien = new Alien(this.scene, data.x, data.y, data.ownerId);
+        
+        // Set network ID and properties
+        alien.id = data.id;
+        alien.health = data.health;
+        alien.isDocked = data.isDocked;
+        alien.aiState = data.aiState;
+        this.scene.matter.body.setAngle(alien.body, data.rotation);
+        this.scene.matter.body.setVelocity(alien.body, { x: data.vx, y: data.vy });
+        
+        this.aliens.push(alien);
+        return alien;
     }
     
     /**

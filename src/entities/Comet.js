@@ -6,12 +6,15 @@ import * as C from '../config/constants.js';
  * Emits gravitational pull to nearby objects
  */
 export default class Comet {
-    constructor(scene, x, y, size, velocity, depth = null) {
+    constructor(scene, x, y, size, velocity, depth = null, ownerId = null) {
         this.scene = scene;
         this.radius = size;
         
         // Generate unique ID for network sync
         this.id = `comet_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Track which player spawned this comet (for distributed spawning)
+        this.ownerId = ownerId;
         
         // Depth for visual layering (1.0 = near, 0.4 = far)
         this.depth = depth !== null ? depth : 

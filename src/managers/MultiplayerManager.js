@@ -62,6 +62,9 @@ export default class MultiplayerManager {
             me.setState('name', this.generateRandomName(), true);
             console.log('[Multiplayer] Local player name set to:', me.getState('name'));
             
+            // Set up host migration listener
+            this.setupHostMigration();
+            
             // Listen for players joining
             onPlayerJoin((playerState) => {
                 this.handlePlayerJoin(playerState);
@@ -69,12 +72,10 @@ export default class MultiplayerManager {
             
             this.isInitialized = true;
             
-            // Start periodic sync for host
-            if (isHost()) {
-                this.startHostSync();
-            }
+            // Start periodic peer-to-peer sync for all players
+            this.startPeerSync();
             
-            console.log('[Multiplayer] Multiplayer manager ready!');
+            console.log('[Multiplayer] Multiplayer manager ready (peer-to-peer mode)!');
             
         } catch (error) {
             console.error('[Multiplayer] Failed to initialize:', error);
@@ -90,6 +91,50 @@ export default class MultiplayerManager {
         const adj = this.nameAdjectives[Math.floor(Math.random() * this.nameAdjectives.length)];
         const noun = this.nameNouns[Math.floor(Math.random() * this.nameNouns.length)];
         return `${adj} ${noun}`;
+    }
+    
+    /**
+     * Setup host migration handling
+     * In peer-to-peer mode, host is just the first player and handles world constants
+     */
+    setupHostMigration() {
+        // Initialize world constants if we're the first host
+        if (isHost()) {
+            console.log('[Multiplayer] We are the host - setting up world constants');
+            
+            // Set world center (galactic origin) - only done once by first host
+            const worldCenterX = getState('worldCenterX');
+            const worldCenterY = getState('worldCenterY');
+            
+            if (worldCenterX === undefined || worldCenterY === undefined) {
+                // First host sets the world center
+                const centerX = this.scene.worldCenterX || 0;
+                const centerY = this.scene.worldCenterY || 0;
+                setState('worldCenterX', centerX, true);
+                setState('worldCenterY', centerY, true);
+                console.log('[Multiplayer] Set world center:', centerX, centerY);
+            } else {
+                // Not the first host - use existing world center
+                this.scene.worldCenterX = worldCenterX;
+                this.scene.worldCenterY = worldCenterY;
+                console.log('[Multiplayer] Using existing world center:', worldCenterX, worldCenterY);
+            }
+        } else {
+            // Client - get world center from state
+            const worldCenterX = getState('worldCenterX');
+            const worldCenterY = getState('worldCenterY');
+            
+            if (worldCenterX !== undefined && worldCenterY !== undefined) {
+                this.scene.worldCenterX = worldCenterX;
+                this.scene.worldCenterY = worldCenterY;
+                console.log('[Multiplayer] Client using world center:', worldCenterX, worldCenterY);
+            }
+        }
+        
+        // Note: Playroom Kit handles host migration automatically
+        // When the host leaves, the next player becomes host
+        // Our peer-to-peer architecture means this transition is seamless
+        // since each player is already managing their own entities
     }
     
     /**
@@ -157,6 +202,9 @@ export default class MultiplayerManager {
                 playerData.ship.destroy('Player Left');
             }
             
+            // Clean up entities owned by this player
+            this.cleanupPlayerEntities(playerId);
+            
             this.players.delete(playerId);
         }
         
@@ -165,52 +213,136 @@ export default class MultiplayerManager {
     }
     
     /**
-     * Start host sync loop - host is authoritative for game state
+     * Clean up entities owned by a player who left
      */
-    startHostSync() {
-        // Host syncs game state every 200ms (reduced for better performance)
-        this.updateInterval = setInterval(() => {
-            this.syncHostState();
-        }, 200);
+    cleanupPlayerEntities(playerId) {
+        console.log('[Multiplayer] Cleaning up entities for player:', playerId);
+        
+        // Remove comets owned by this player
+        const cometsToRemove = this.scene.cometManager.comets.filter(
+            c => c.ownerId === playerId
+        );
+        for (const comet of cometsToRemove) {
+            const index = this.scene.cometManager.comets.indexOf(comet);
+            if (index > -1) {
+                this.scene.cometManager.comets.splice(index, 1);
+                comet.destroy();
+            }
+        }
+        
+        // Remove aliens owned by this player
+        const aliensToRemove = this.scene.alienManager.aliens.filter(
+            a => a.ownerId === playerId
+        );
+        for (const alien of aliensToRemove) {
+            const index = this.scene.alienManager.aliens.indexOf(alien);
+            if (index > -1) {
+                this.scene.alienManager.aliens.splice(index, 1);
+                alien.destroy();
+            }
+        }
+        
+        console.log('[Multiplayer] Cleaned up:', cometsToRemove.length, 'comets,', aliensToRemove.length, 'aliens');
     }
     
     /**
-     * Sync game state (host only)
+     * Start peer sync loop - all players sync their owned entities
      */
-    syncHostState() {
-        if (!isHost()) return;
+    startPeerSync() {
+        // All players sync their owned entities every 200ms
+        this.updateInterval = setInterval(() => {
+            this.syncOwnedEntities();
+        }, 200);
+        
+        // Listen for entity spawn events from other players
+        this.setupEntitySpawnListeners();
+    }
+    
+    /**
+     * Sync entities owned by this player
+     * Each player is authoritative for entities they spawned
+     */
+    syncOwnedEntities() {
+        if (!this.localPlayerId) return;
         
         // Check if managers are ready
         if (!this.scene.cometManager || !this.scene.alienManager) {
-            console.warn('[Host] Managers not ready yet, skipping sync');
             return;
         }
         
-        // Serialize all comets
-        const cometData = this.scene.cometManager.serializeComets();
-        setState('comets', cometData, false); // Use unreliable for faster sync
+        // Get only comets owned by this player
+        const ownedComets = this.scene.cometManager.comets.filter(
+            c => c.ownerId === this.localPlayerId
+        );
         
-        // Debug log very rarely
-        if (Math.random() < 0.002) { // 0.2% chance to log
-            console.log('[Host] Syncing:', cometData.length, 'comets,', this.scene.alienManager.getAliens().length, 'aliens (projectiles synced via events)');
+        // Get only aliens owned by this player
+        const ownedAliens = this.scene.alienManager.aliens.filter(
+            a => a.ownerId === this.localPlayerId
+        );
+        
+        // Serialize only owned entities
+        const cometData = ownedComets.map((comet) => ({
+            id: comet.id,
+            ownerId: comet.ownerId,
+            x: comet.body.position.x,
+            y: comet.body.position.y,
+            vx: comet.body.velocity.x,
+            vy: comet.body.velocity.y,
+            radius: comet.radius,
+            depth: comet.depth,
+            rotation: comet.rotation,
+            rotationSpeed: comet.rotationSpeed
+        }));
+        
+        const alienData = ownedAliens.map((alien) => ({
+            id: alien.id,
+            ownerId: alien.ownerId,
+            x: alien.body.position.x,
+            y: alien.body.position.y,
+            vx: alien.body.velocity.x,
+            vy: alien.body.velocity.y,
+            rotation: alien.body.angle,
+            health: alien.health,
+            isDocked: alien.isDocked,
+            aiState: alien.aiState
+        }));
+        
+        // Broadcast owned entities via player state
+        if (myPlayer()) {
+            myPlayer().setState('ownedComets', cometData, false); // Unreliable for fast updates
+            myPlayer().setState('ownedAliens', alienData, false);
         }
         
-        // Serialize all aliens
-        const alienData = this.scene.alienManager.serializeAliens();
-        setState('aliens', alienData, false);
-        
-        // Note: Projectiles are no longer synced - each client creates them locally
-        // based on shoot events from players and aliens
-        
-        // Sync world center less frequently to avoid jumps
-        // Only update every 10th sync
-        if (!this.worldCenterSyncCounter) this.worldCenterSyncCounter = 0;
-        this.worldCenterSyncCounter++;
-        if (this.worldCenterSyncCounter >= 10) {
-            setState('worldCenterX', this.scene.worldCenterX || 0, true); // Use reliable for less frequent updates
-            setState('worldCenterY', this.scene.worldCenterY || 0, true);
-            this.worldCenterSyncCounter = 0;
+        // Debug log less rarely to help troubleshoot
+        if (Math.random() < 0.01) {
+            console.log('[Peer] Syncing owned entities - playerId:', this.localPlayerId, 'comets:', cometData.length, 'aliens:', alienData.length);
         }
+    }
+    
+    /**
+     * Setup listeners for entity spawn events from other players
+     */
+    setupEntitySpawnListeners() {
+        // Listen for comet spawn events (set up per player in handlePlayerJoin)
+        // Listen for alien spawn events (set up per player in handlePlayerJoin)
+    }
+    
+    /**
+     * Broadcast comet spawn to other players
+     * Note: Spawns are automatically synced via regular entity sync cycle
+     */
+    broadcastCometSpawn(comet) {
+        // New comets will be synced automatically in the next sync cycle
+        // No need for immediate broadcast
+    }
+    
+    /**
+     * Broadcast alien spawn to other players
+     * Note: Spawns are automatically synced via regular entity sync cycle
+     */
+    broadcastAlienSpawn(alien) {
+        // New aliens will be synced automatically in the next sync cycle
+        // No need for immediate broadcast
     }
     
     /**
@@ -292,52 +424,132 @@ export default class MultiplayerManager {
             }
         }
         
-        // Sync comets from host (clients only)
-        if (!isHost()) {
-            const cometData = getState('comets');
-            if (cometData && Array.isArray(cometData)) {
-                this.scene.cometManager.syncFromNetwork(cometData);
+        // Sync entities from all players (peer-to-peer)
+        // Each player syncs entities owned by other players
+        for (const [playerId, playerData] of this.players) {
+            if (playerData.isLocal) continue; // Skip local player's entities (we own those)
+            
+            const { playerState } = playerData;
+            
+            // Sync comets owned by this remote player
+            const ownedComets = playerState.getState('ownedComets');
+            if (ownedComets && Array.isArray(ownedComets)) {
+                // Debug log occasionally
+                if (Math.random() < 0.01) {
+                    // console.log('[Peer] Receiving from player', playerId, '- comets:', ownedComets.length);
+                }
+                this.syncRemotePlayerComets(ownedComets);
             }
             
-            // Sync aliens from host
-            const alienData = getState('aliens');
-            if (alienData && Array.isArray(alienData)) {
-                this.scene.alienManager.syncFromNetwork(alienData);
+            // Sync aliens owned by this remote player
+            const ownedAliens = playerState.getState('ownedAliens');
+            if (ownedAliens && Array.isArray(ownedAliens)) {
+                // Debug log occasionally
+                if (Math.random() < 0.01) {
+                    // console.log('[Peer] Receiving from player', playerId, '- aliens:', ownedAliens.length);
+                }
+                this.syncRemotePlayerAliens(ownedAliens);
             }
             
-            // Listen for alien shoot events from host
-            const alienShots = getState('alienShots');
+            // Listen for alien shoot events from this remote player
+            const alienShots = playerState.getState('alienShots');
             if (alienShots && Array.isArray(alienShots)) {
+                // Track processed shots per player
+                if (!playerData.processedAlienShots) {
+                    playerData.processedAlienShots = new Set();
+                }
+                
                 for (const shot of alienShots) {
-                    // Check if we've already processed this shot
-                    if (!this.processedAlienShots) {
-                        this.processedAlienShots = new Set();
-                    }
-                    
                     const shotKey = `${shot.alienId}_${shot.timestamp}`;
-                    if (!this.processedAlienShots.has(shotKey)) {
+                    if (!playerData.processedAlienShots.has(shotKey)) {
+                        // Create local projectile from remote alien's shoot event
                         this.createAlienProjectile(shot.alienId, shot);
-                        this.processedAlienShots.add(shotKey);
+                        playerData.processedAlienShots.add(shotKey);
                         
                         // Clean up old processed shots (keep last 50)
-                        if (this.processedAlienShots.size > 50) {
-                            const shotsArray = Array.from(this.processedAlienShots);
-                            this.processedAlienShots = new Set(shotsArray.slice(-50));
+                        if (playerData.processedAlienShots.size > 50) {
+                            const shotsArray = Array.from(playerData.processedAlienShots);
+                            playerData.processedAlienShots = new Set(shotsArray.slice(-50));
                         }
                     }
                 }
             }
-            
-            // Sync world center from host (interpolated)
-            const worldCenterX = getState('worldCenterX');
-            const worldCenterY = getState('worldCenterY');
-            if (worldCenterX !== undefined && worldCenterY !== undefined) {
-                // Interpolate world center to avoid jumps
-                const currentX = this.scene.worldCenterX || worldCenterX;
-                const currentY = this.scene.worldCenterY || worldCenterY;
-                const lerpFactor = 0.05; // Very slow interpolation
-                this.scene.worldCenterX = currentX + (worldCenterX - currentX) * lerpFactor;
-                this.scene.worldCenterY = currentY + (worldCenterY - currentY) * lerpFactor;
+        }
+    }
+    
+    /**
+     * Sync comets from a remote player
+     */
+    syncRemotePlayerComets(cometData) {
+        const existingComets = new Map();
+        for (const comet of this.scene.cometManager.comets) {
+            existingComets.set(comet.id, comet);
+        }
+        
+        // Update or create comets from remote player
+        for (const data of cometData) {
+            if (existingComets.has(data.id)) {
+                // Update existing comet with smooth interpolation
+                const comet = existingComets.get(data.id);
+                
+                const currentX = comet.body.position.x;
+                const currentY = comet.body.position.y;
+                const lerpFactor = 0.15;
+                const targetX = currentX + (data.x - currentX) * lerpFactor;
+                const targetY = currentY + (data.y - currentY) * lerpFactor;
+                
+                this.scene.matter.body.setPosition(comet.body, { x: targetX, y: targetY });
+                this.scene.matter.body.setVelocity(comet.body, { x: data.vx, y: data.vy });
+                
+                comet.rotation = data.rotation;
+                comet.rotationSpeed = data.rotationSpeed;
+                
+                existingComets.delete(data.id);
+            } else {
+                // Create new comet from remote player
+                this.scene.cometManager.createCometFromNetwork(data);
+            }
+        }
+    }
+    
+    /**
+     * Sync aliens from a remote player
+     */
+    syncRemotePlayerAliens(alienData) {
+        const existingAliens = new Map();
+        for (const alien of this.scene.alienManager.aliens) {
+            existingAliens.set(alien.id, alien);
+        }
+        
+        // Update or create aliens from remote player
+        for (const data of alienData) {
+            if (existingAliens.has(data.id)) {
+                // Update existing alien with smooth interpolation
+                const alien = existingAliens.get(data.id);
+                
+                const currentX = alien.body.position.x;
+                const currentY = alien.body.position.y;
+                const lerpFactor = 0.15;
+                const targetX = currentX + (data.x - currentX) * lerpFactor;
+                const targetY = currentY + (data.y - currentY) * lerpFactor;
+                
+                this.scene.matter.body.setPosition(alien.body, { x: targetX, y: targetY });
+                this.scene.matter.body.setVelocity(alien.body, { x: data.vx, y: data.vy });
+                
+                let angleDiff = data.rotation - alien.body.angle;
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                const newAngle = alien.body.angle + angleDiff * 0.15;
+                this.scene.matter.body.setAngle(alien.body, newAngle);
+                
+                alien.health = data.health;
+                alien.isDocked = data.isDocked;
+                alien.aiState = data.aiState;
+                
+                existingAliens.delete(data.id);
+            } else {
+                // Create new alien from remote player
+                this.scene.alienManager.createAlienFromNetwork(data);
             }
         }
     }
@@ -449,9 +661,10 @@ export default class MultiplayerManager {
     
     /**
      * Check if multiplayer is active
+     * Returns true if multiplayer mode is enabled, even with only 1 player
      */
     isMultiplayerActive() {
-        return this.isInitialized && this.players.size > 1;
+        return this.isInitialized;
     }
     
     /**

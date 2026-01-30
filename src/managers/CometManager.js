@@ -16,8 +16,9 @@ export default class CometManager {
     /**
      * Spawn a new comet from all directions
      * Comets spawn around ALL active players
+     * Each player spawns their own comets and broadcasts to others
      */
-    spawnComet() {
+    spawnComet(ownerId = null) {
         // Get all active player positions
         const playerPositions = [];
         
@@ -97,15 +98,22 @@ export default class CometManager {
             y: Math.sin(velocityAngle) * speed
         };
         
-        const comet = new Comet(this.scene, x, y, size, velocity, depth);
+        const comet = new Comet(this.scene, x, y, size, velocity, depth, ownerId);
         this.comets.push(comet);
+        
+        // Broadcast comet spawn to other players if in multiplayer
+        if (this.scene.multiplayerManager && this.scene.multiplayerManager.isMultiplayerActive()) {
+            this.scene.multiplayerManager.broadcastCometSpawn(comet);
+        }
+        
+        return comet;
     }
     
     /**
      * Spawn comets ahead of player's direction of travel
      * Ensures there are obstacles when player jets forward quickly
      */
-    spawnAheadOfPlayer(ship) {
+    spawnAheadOfPlayer(ship, ownerId = null) {
         if (!ship || !ship.alive) return;
         
         // Only spawn ahead if player is moving fast enough
@@ -175,39 +183,53 @@ export default class CometManager {
                 };
             }
             
-            const comet = new Comet(this.scene, x, y, size, velocity, depth);
+            const comet = new Comet(this.scene, x, y, size, velocity, depth, ownerId);
             this.comets.push(comet);
+            
+            // Broadcast comet spawn to other players if in multiplayer
+            if (this.scene.multiplayerManager && this.scene.multiplayerManager.isMultiplayerActive()) {
+                this.scene.multiplayerManager.broadcastCometSpawn(comet);
+            }
         }
     }
     
     /**
      * Update all comets and handle spawning
+     * Now supports distributed spawning - each player spawns their own comets
      */
     update(ship) {
+        // Get local player ID if in multiplayer
+        const isMultiplayer = this.scene.multiplayerManager && this.scene.multiplayerManager.isMultiplayerActive();
+        const localPlayerId = isMultiplayer ? this.scene.multiplayerManager.localPlayerId : null;
+        
+        // Debug log occasionally
+        if (isMultiplayer && Math.random() < 0.001) {
+            console.log('[CometManager] Update - localPlayerId:', localPlayerId, 'comet count:', this.comets.length);
+        }
+        
         // Dynamic spawn rate based on score
         this.spawnRate = C.COMET_BASE_SPAWN_RATE + 
                         (this.score * C.COMET_SPAWN_INCREASE_RATE);
         
         // Only spawn new comets if we're under the limit
+        // In multiplayer, only spawn for local player (each player spawns their own)
         if (this.comets.length < C.MAX_COMETS_ON_SCREEN && Math.random() < this.spawnRate) {
-            this.spawnComet();
+            this.spawnComet(localPlayerId);
         }
         
-        // Spawn comets ahead of all fast-moving players (less frequently)
+        // Spawn comets ahead of local player only (in multiplayer)
         // Check every 30 frames to avoid over-spawning
         if (this.scene.game.loop.frame % 30 === 0 && this.comets.length < C.MAX_COMETS_ON_SCREEN - 2) {
-            // Get all active players
-            let playersToCheck = [];
-            if (this.scene.multiplayerManager && this.scene.multiplayerManager.isMultiplayerActive()) {
-                playersToCheck = this.scene.multiplayerManager.getAllShips().filter(s => s.alive);
-            } else if (ship && ship.alive) {
-                playersToCheck = [ship];
-            }
-            
-            // Spawn ahead of a random fast-moving player
-            if (playersToCheck.length > 0) {
-                const randomPlayer = playersToCheck[Math.floor(Math.random() * playersToCheck.length)];
-                this.spawnAheadOfPlayer(randomPlayer);
+            // In multiplayer, only spawn ahead of local player
+            if (localPlayerId) {
+                if (ship && ship.alive && ship.isLocal) {
+                    this.spawnAheadOfPlayer(ship, localPlayerId);
+                }
+            } else {
+                // Single player - spawn ahead of the ship
+                if (ship && ship.alive) {
+                    this.spawnAheadOfPlayer(ship, null);
+                }
             }
         }
         
@@ -279,6 +301,7 @@ export default class CometManager {
     serializeComets() {
         return this.comets.map((comet) => ({
             id: comet.id,
+            ownerId: comet.ownerId,
             x: comet.body.position.x,
             y: comet.body.position.y,
             vx: comet.body.velocity.x,
@@ -288,6 +311,34 @@ export default class CometManager {
             rotation: comet.rotation,
             rotationSpeed: comet.rotationSpeed
         }));
+    }
+    
+    /**
+     * Create a comet from network data (when remote player spawns one)
+     */
+    createCometFromNetwork(data) {
+        // Check if comet already exists
+        const existingComet = this.comets.find(c => c.id === data.id);
+        if (existingComet) return;
+        
+        const velocity = { x: data.vx, y: data.vy };
+        const comet = new Comet(
+            this.scene, 
+            data.x, 
+            data.y, 
+            data.radius, 
+            velocity, 
+            data.depth, 
+            data.ownerId
+        );
+        
+        // Set network ID and properties
+        comet.id = data.id;
+        comet.rotation = data.rotation || 0;
+        comet.rotationSpeed = data.rotationSpeed || 0;
+        
+        this.comets.push(comet);
+        return comet;
     }
     
     /**
