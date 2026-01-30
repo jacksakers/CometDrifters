@@ -41,7 +41,7 @@ export default class Ship {
         // Combat state
         this.health = C.SHIP_START_HEALTH;
         this.maxHealth = C.SHIP_MAX_HEALTH;
-        this.laserCharge = 100; // 0-100 percentage
+        this.laserCharge = 0; // 0-100 percentage, starts empty
         this.isCharging = false;
         this.invulnerableTimer = 0; // Temporary invulnerability after hit
         
@@ -273,7 +273,7 @@ export default class Ship {
             this.updateDocking();
             
             // Heal while docked
-            this.health = Math.min(this.maxHealth, this.health + 0.1);
+            this.health = Math.min(this.maxHealth, this.health + C.PLAYER_DOCK_HEAL_AMOUNT);
             
             // Allow undocking
             if (inputState.thrust) {
@@ -312,9 +312,11 @@ export default class Ship {
     updateLaserCharge(inputState) {
         // Charge laser when holding the charge button or when not shooting
         if (this.laserCharge < 100) {
-            // Charge faster while not moving or docked
-            const chargeRate = this.isDocked ? 2.5 : 1.5;
-            this.laserCharge = Math.min(100, this.laserCharge + chargeRate);
+            // Base charge rate: 100 / LASER_CHARGE_TIME frames to fully charge
+            const baseChargeRate = 100 / C.LASER_CHARGE_TIME;
+            // Charge faster while docked or while flying
+            const multiplier = this.isDocked ? C.LASER_CHARGE_RATE_DOCKED : C.LASER_CHARGE_RATE_FLYING;
+            this.laserCharge = Math.min(100, this.laserCharge + (baseChargeRate * multiplier));
         }
     }
     
@@ -329,7 +331,7 @@ export default class Ship {
         this.laserCharge -= C.LASER_CHARGE_COST;
         
         // Create projectile ahead of ship
-        const spawnDist = C.SHIP_SIZE + 15;
+        const spawnDist = C.SHIP_SIZE + C.PROJECTILE_SPAWN_DISTANCE;
         const x = this.body.position.x + Math.cos(this.body.angle) * spawnDist;
         const y = this.body.position.y + Math.sin(this.body.angle) * spawnDist;
         

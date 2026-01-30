@@ -57,7 +57,7 @@ export default class Alien {
         this.health -= amount;
         
         // Flash red when hit
-        this.flashTimer = 10;
+        this.flashTimer = C.ALIEN_FLASH_TIME;
         
         if (this.health <= 0) {
             this.destroy();
@@ -113,7 +113,7 @@ export default class Alien {
         }
         
         // Wander randomly
-        if (this.stateTimer % 60 === 0) {
+        if (this.stateTimer % C.ALIEN_WANDER_INTERVAL === 0) {
             // Change direction occasionally
             const randomAngle = Math.random() * Math.PI * 2;
             this.targetAngle = randomAngle;
@@ -292,7 +292,7 @@ export default class Alien {
         const shootAngle = this.body.angle + inaccuracy;
         
         // Create projectile slightly ahead of alien
-        const spawnDist = C.ALIEN_SIZE + 10;
+        const spawnDist = C.ALIEN_SIZE + C.PROJECTILE_SPAWN_DISTANCE;
         const x = this.body.position.x + Math.cos(shootAngle) * spawnDist;
         const y = this.body.position.y + Math.sin(shootAngle) * spawnDist;
         
@@ -423,8 +423,8 @@ export default class Alien {
         
         // Heal slowly while docked
         this.healTimer = (this.healTimer || 0) + 1;
-        if (this.healTimer >= 60) { // Heal 1 health per second
-            this.health = Math.min(this.maxHealth, this.health + 1);
+        if (this.healTimer >= C.ALIEN_HEAL_INTERVAL) {
+            this.health = Math.min(this.maxHealth, this.health + C.ALIEN_HEAL_AMOUNT);
             this.healTimer = 0;
         }
         
@@ -513,9 +513,9 @@ export default class Alien {
         
         // Health bar above alien
         if (this.health < this.maxHealth) {
-            const barWidth = 30;
-            const barHeight = 4;
-            const barY = y - C.ALIEN_SIZE - 10;
+            const barWidth = C.ALIEN_HEALTH_BAR_WIDTH;
+            const barHeight = C.ALIEN_HEALTH_BAR_HEIGHT;
+            const barY = y - C.ALIEN_SIZE - C.ALIEN_HEALTH_BAR_OFFSET;
             
             // Background
             this.graphics.fillStyle(0x000000, 0.6);
@@ -558,7 +558,7 @@ export default class Alien {
         
         // Award points
         if (this.scene.events) {
-            this.scene.events.emit('alienDestroyed', 50); // 50 points
+            this.scene.events.emit('alienDestroyed', C.ALIEN_KILL_SCORE);
         }
     }
     
@@ -570,21 +570,21 @@ export default class Alien {
         const y = this.body.position.y;
         
         // Create explosion particles
-        for (let i = 0; i < 20; i++) {
-            const angle = (Math.PI * 2 * i) / 20;
-            const speed = 2 + Math.random() * 4;
+        for (let i = 0; i < C.EXPLOSION_PARTICLE_COUNT; i++) {
+            const angle = (Math.PI * 2 * i) / C.EXPLOSION_PARTICLE_COUNT;
+            const speed = C.EXPLOSION_PARTICLE_SPEED_MIN + Math.random() * (C.EXPLOSION_PARTICLE_SPEED_MAX - C.EXPLOSION_PARTICLE_SPEED_MIN);
             
             const particle = this.scene.add.circle(
-                x, y, 3, C.ALIEN_COLOR, 1
+                x, y, C.EXPLOSION_PARTICLE_SIZE, C.ALIEN_COLOR, 1
             );
             
             this.scene.tweens.add({
                 targets: particle,
-                x: x + Math.cos(angle) * speed * 20,
-                y: y + Math.sin(angle) * speed * 20,
+                x: x + Math.cos(angle) * speed * C.EXPLOSION_PARTICLE_DISTANCE,
+                y: y + Math.sin(angle) * speed * C.EXPLOSION_PARTICLE_DISTANCE,
                 alpha: 0,
                 scale: 0,
-                duration: 500 + Math.random() * 300,
+                duration: C.EXPLOSION_DURATION_MIN + Math.random() * (C.EXPLOSION_DURATION_MAX - C.EXPLOSION_DURATION_MIN),
                 ease: 'Power2',
                 onComplete: () => particle.destroy()
             });

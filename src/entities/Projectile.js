@@ -19,7 +19,7 @@ export default class Projectile {
         this.alive = true;
         
         // Create projectile body
-        this.body = scene.matter.add.circle(x, y, 4, {
+        this.body = scene.matter.add.circle(x, y, C.PROJECTILE_RADIUS, {
             isSensor: true, // Pass through but detect collisions
             friction: 0,
             frictionAir: 0,
@@ -46,7 +46,7 @@ export default class Projectile {
         
         // Trail effect
         this.trail = [];
-        this.maxTrailLength = 8;
+        this.maxTrailLength = C.PROJECTILE_TRAIL_LENGTH;
     }
     
     /**
@@ -102,13 +102,13 @@ export default class Projectile {
         
         // Draw trail
         if (this.trail.length > 1) {
-            this.graphics.lineStyle(3, this.color, 0.6);
+            this.graphics.lineStyle(C.PROJECTILE_TRAIL_WIDTH, this.color, C.PROJECTILE_TRAIL_ALPHA);
             this.graphics.beginPath();
             this.graphics.moveTo(this.trail[0].x, this.trail[0].y);
             
             for (let i = 1; i < this.trail.length; i++) {
                 const alpha = i / this.trail.length;
-                this.graphics.lineStyle(3 * alpha, this.color, 0.6 * alpha);
+                this.graphics.lineStyle(C.PROJECTILE_TRAIL_WIDTH * alpha, this.color, C.PROJECTILE_TRAIL_ALPHA * alpha);
                 this.graphics.lineTo(this.trail[i].x, this.trail[i].y);
             }
             
@@ -117,11 +117,11 @@ export default class Projectile {
         
         // Draw main projectile
         this.graphics.fillStyle(this.color, 1);
-        this.graphics.fillCircle(x, y, 5);
+        this.graphics.fillCircle(x, y, C.PROJECTILE_VISUAL_RADIUS);
         
         // Glow effect
-        this.graphics.fillStyle(this.color, 0.4);
-        this.graphics.fillCircle(x, y, 8);
+        this.graphics.fillStyle(this.color, C.PROJECTILE_GLOW_ALPHA);
+        this.graphics.fillCircle(x, y, C.PROJECTILE_GLOW_RADIUS);
     }
     
     /**
@@ -145,12 +145,12 @@ export default class Projectile {
         const y = this.body.position.y;
         
         // Create small explosion particles
-        for (let i = 0; i < 8; i++) {
-            const angle = (Math.PI * 2 * i) / 8;
-            const speed = 2 + Math.random() * 3;
+        for (let i = 0; i < C.PROJECTILE_IMPACT_PARTICLES; i++) {
+            const angle = (Math.PI * 2 * i) / C.PROJECTILE_IMPACT_PARTICLES;
+            const speed = C.PROJECTILE_IMPACT_SPEED_MIN + Math.random() * (C.PROJECTILE_IMPACT_SPEED_MAX - C.PROJECTILE_IMPACT_SPEED_MIN);
             
             const particle = this.scene.add.circle(
-                x, y, 2, this.color, 1
+                x, y, C.PROJECTILE_IMPACT_PARTICLE_SIZE, this.color, 1
             );
             
             const vx = Math.cos(angle) * speed;
@@ -163,7 +163,7 @@ export default class Projectile {
                 y: y + vy * 10,
                 alpha: 0,
                 scale: 0,
-                duration: 300,
+                duration: C.PROJECTILE_IMPACT_DURATION,
                 ease: 'Power2',
                 onComplete: () => particle.destroy()
             });

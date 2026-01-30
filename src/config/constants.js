@@ -75,6 +75,12 @@ export const UI_PADDING = 20;
 
 // Particle Effects
 export const EXPLOSION_PARTICLE_COUNT = 20;
+export const EXPLOSION_PARTICLE_SIZE = 3;
+export const EXPLOSION_PARTICLE_SPEED_MIN = 2;
+export const EXPLOSION_PARTICLE_SPEED_MAX = 6;
+export const EXPLOSION_PARTICLE_DISTANCE = 20;
+export const EXPLOSION_DURATION_MIN = 500;
+export const EXPLOSION_DURATION_MAX = 800;
 export const THRUST_PARTICLE_COUNT = 2;
 export const PARTICLE_LIFETIME = 60; // Frames
 
@@ -107,12 +113,31 @@ export const COMET_COLLISION_FRICTION = 0.1;     // Friction during collision
 // Player Combat Settings
 export const SHIP_MAX_HEALTH = 100;
 export const SHIP_START_HEALTH = 100;
+export const PLAYER_DOCK_HEAL_AMOUNT = 0.05;
+export const SHIP_INVULNERABILITY_TIME = 60; // Frames of invulnerability after hit (1 second)
 export const LASER_DAMAGE = 15; // Damage per laser hit
-export const LASER_CHARGE_TIME = 120; // Frames to fully charge (2 seconds at 60fps)
+export const LASER_CHARGE_TIME = 20; // Frames to fully charge (2 seconds at 60fps)
+export const LASER_CHARGE_RATE_FLYING = 1.5; // Multiplier when flying
+export const LASER_CHARGE_RATE_DOCKED = 2.5; // Multiplier when docked
 export const LASER_SPEED = 15;
 export const LASER_LIFETIME = 120; // Frames before projectile expires
 export const LASER_COLOR = 0x00ffff;
 export const LASER_CHARGE_COST = 100; // Percentage of charge consumed per shot
+
+// Projectile Visual Settings
+export const PROJECTILE_RADIUS = 4; // Physics body radius
+export const PROJECTILE_VISUAL_RADIUS = 5; // Visual dot radius
+export const PROJECTILE_GLOW_RADIUS = 8; // Glow effect radius
+export const PROJECTILE_GLOW_ALPHA = 0.4; // Glow transparency
+export const PROJECTILE_TRAIL_LENGTH = 8; // Number of trail points
+export const PROJECTILE_TRAIL_WIDTH = 3; // Trail line width
+export const PROJECTILE_TRAIL_ALPHA = 0.6; // Trail transparency
+export const PROJECTILE_SPAWN_DISTANCE = 10; // Distance from ship/alien when spawning
+export const PROJECTILE_IMPACT_PARTICLES = 8; // Number of particles in impact effect
+export const PROJECTILE_IMPACT_PARTICLE_SIZE = 2; // Size of impact particles
+export const PROJECTILE_IMPACT_SPEED_MIN = 2; // Minimum particle speed
+export const PROJECTILE_IMPACT_SPEED_MAX = 5; // Maximum particle speed
+export const PROJECTILE_IMPACT_DURATION = 300; // Milliseconds for impact animation
 
 // Alien Settings
 export const ALIEN_SIZE = 18;
@@ -129,6 +154,13 @@ export const ALIEN_STROKE_COLOR = 0xcc0033;
 export const ALIEN_SPAWN_INTERVAL = 300; // Frames between alien spawns (5 seconds)
 export const ALIEN_SPAWN_VARIANCE = 120; // Random variance in spawn time
 export const MAX_ALIENS = 5; // Maximum aliens on screen
+export const ALIEN_FLASH_TIME = 10; // Frames to flash when hit
+export const ALIEN_HEAL_INTERVAL = 60; // Frames between healing ticks when docked (1 second)
+export const ALIEN_HEAL_AMOUNT = 1; // Health restored per heal tick
+export const ALIEN_KILL_SCORE = 50; // Points for killing an alien
+export const ALIEN_HEALTH_BAR_WIDTH = 30; // Width of health bar above alien
+export const ALIEN_HEALTH_BAR_HEIGHT = 4; // Height of health bar
+export const ALIEN_HEALTH_BAR_OFFSET = 10; // Distance above alien
 
 // Alien AI Settings
 export const ALIEN_ATTACK_RANGE = 400; // Distance to start attacking player
@@ -136,6 +168,7 @@ export const ALIEN_FLEE_HEALTH = 15; // Health threshold to flee to comets
 export const ALIEN_SHOOT_COOLDOWN = 90; // Frames between shots
 export const ALIEN_SHOOT_ACCURACY = 0.15; // Radians of inaccuracy
 export const ALIEN_DOCK_PROBABILITY = 0.3; // Chance to dock when near comet
+export const ALIEN_WANDER_INTERVAL = 60; // Frames between direction changes while wandering
 
 // Alien Projectile Settings
 export const ALIEN_PROJECTILE_DAMAGE = 10;
