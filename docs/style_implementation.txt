@@ -66,7 +66,7 @@ Add "Gravity Wells" to comets (sensors).
 
 Implement "Hard Dock" (pressing down while matching speed).
 
-Deliverable: You die if you don't catch a ride on a comet.
+Deliverable: catch a ride on a comet.
 
 Phase 3: The Network (Playroom Kit)
 

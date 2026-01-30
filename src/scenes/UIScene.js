@@ -15,6 +15,7 @@ export default class UIScene extends Phaser.Scene {
         
         // Create UI elements
         this.createHeader();
+        this.createCombatUI();
         this.createFuelGauge();
         this.createControlsHint();
         this.createGameOverScreen();
@@ -22,6 +23,8 @@ export default class UIScene extends Phaser.Scene {
         // Listen to game events
         this.gameScene.events.on('updateScore', this.updateScore, this);
         this.gameScene.events.on('updateFuel', this.updateFuel, this);
+        this.gameScene.events.on('updateHealth', this.updateHealth, this);
+        this.gameScene.events.on('updateLaserCharge', this.updateLaserCharge, this);
         this.gameScene.events.on('updateDockStatus', this.updateDockStatus, this);
         this.gameScene.events.on('gameOver', this.showGameOver, this);
         this.gameScene.events.on('gameReset', this.hideGameOver, this);
@@ -69,6 +72,136 @@ export default class UIScene extends Phaser.Scene {
                 fontStyle: 'bold'
             }
         );
+    }
+    
+    /**
+     * Create combat UI - health, laser charge, special weapon
+     */
+    createCombatUI() {
+        const rightX = C.GAME_WIDTH - C.UI_PADDING;
+        const topY = C.UI_PADDING;
+        
+        // Health Bar
+        this.add.text(
+            rightX, 
+            topY, 
+            'HULL', 
+            {
+                fontFamily: C.UI_FONT_FAMILY,
+                fontSize: '12px',
+                color: '#ffffff',
+                alpha: 0.8,
+                fontStyle: 'bold'
+            }
+        ).setOrigin(1, 0);
+        
+        const healthBarWidth = 200;
+        const healthBarHeight = 20;
+        const healthBarY = topY + 20;
+        
+        // Health background
+        this.healthBarBg = this.add.rectangle(
+            rightX - healthBarWidth / 2,
+            healthBarY,
+            healthBarWidth,
+            healthBarHeight,
+            0x000000,
+            0.6
+        ).setOrigin(0.5, 0);
+        this.healthBarBg.setStrokeStyle(2, 0xffffff, 0.4);
+        
+        // Health bar (green)
+        this.healthBar = this.add.rectangle(
+            rightX - healthBarWidth / 2,
+            healthBarY,
+            healthBarWidth - 4,
+            healthBarHeight - 4,
+            0x00ff00
+        ).setOrigin(0.5, 0);
+        
+        this.healthBarMaxWidth = healthBarWidth - 4;
+        
+        // Laser Charge Bar
+        const laserY = healthBarY + 40;
+        
+        this.add.text(
+            rightX, 
+            laserY, 
+            'LASER', 
+            {
+                fontFamily: C.UI_FONT_FAMILY,
+                fontSize: '12px',
+                color: '#00ffff',
+                alpha: 0.8,
+                fontStyle: 'bold'
+            }
+        ).setOrigin(1, 0);
+        
+        const laserBarY = laserY + 20;
+        
+        // Laser background
+        this.laserBarBg = this.add.rectangle(
+            rightX - healthBarWidth / 2,
+            laserBarY,
+            healthBarWidth,
+            healthBarHeight,
+            0x000000,
+            0.6
+        ).setOrigin(0.5, 0);
+        this.laserBarBg.setStrokeStyle(2, 0x00ffff, 0.4);
+        
+        // Laser bar (cyan)
+        this.laserBar = this.add.rectangle(
+            rightX - healthBarWidth / 2,
+            laserBarY,
+            healthBarWidth - 4,
+            healthBarHeight - 4,
+            0x00ffff
+        ).setOrigin(0.5, 0);
+        
+        this.laserBarMaxWidth = healthBarWidth - 4;
+        
+        // Special Weapon Slot (placeholder)
+        const specialY = laserBarY + 50;
+        
+        this.add.text(
+            rightX, 
+            specialY, 
+            'SPECIAL', 
+            {
+                fontFamily: C.UI_FONT_FAMILY,
+                fontSize: '12px',
+                color: '#ff00ff',
+                alpha: 0.5,
+                fontStyle: 'bold'
+            }
+        ).setOrigin(1, 0);
+        
+        const specialSlotY = specialY + 20;
+        
+        // Special weapon slot (empty for now)
+        this.specialSlot = this.add.rectangle(
+            rightX - 30,
+            specialSlotY,
+            50,
+            50,
+            0x000000,
+            0.6
+        ).setOrigin(0.5, 0);
+        this.specialSlot.setStrokeStyle(2, 0xff00ff, 0.3);
+        
+        // "EMPTY" text
+        this.add.text(
+            rightX - 30,
+            specialSlotY + 25,
+            'EMPTY',
+            {
+                fontFamily: C.UI_FONT_FAMILY,
+                fontSize: '10px',
+                color: '#ff00ff',
+                alpha: 0.3
+            }
+        ).setOrigin(0.5);
     }
     
     /**
@@ -126,7 +259,7 @@ export default class UIScene extends Phaser.Scene {
         this.controlsText = this.add.text(
             C.GAME_WIDTH / 2, 
             C.GAME_HEIGHT - 10, 
-            'Arrow Keys or Touch to Move | S/Down to Dock | ESC to Reset', 
+            'Arrow Keys: Move | S: Dock | Z: Laser | X: Special (Empty) | ESC: Reset', 
             {
                 fontFamily: C.UI_FONT_FAMILY,
                 fontSize: '11px',
@@ -315,6 +448,45 @@ export default class UIScene extends Phaser.Scene {
         if (isDocked) {
             this.fuelLabel.setText('DOCKED: REFUELING');
             this.fuelLabel.setColor('#4ade80');
+        }
+    }
+    
+    /**
+     * Update health bar
+     */
+    updateHealth(healthPercent) {
+        // Update bar width
+        const newWidth = (healthPercent / 100) * this.healthBarMaxWidth;
+        this.healthBar.width = newWidth;
+        
+        // Update color based on health
+        if (healthPercent > 50) {
+            this.healthBar.setFillStyle(0x00ff00); // Green
+        } else if (healthPercent > 25) {
+            this.healthBar.setFillStyle(0xffff00); // Yellow
+        } else {
+            this.healthBar.setFillStyle(0xff0000); // Red
+        }
+    }
+    
+    /**
+     * Update laser charge bar
+     */
+    updateLaserCharge(chargePercent) {
+        // Update bar width
+        const newWidth = (chargePercent / 100) * this.laserBarMaxWidth;
+        this.laserBar.width = newWidth;
+        
+        // Update color and alpha based on charge
+        if (chargePercent >= 100) {
+            this.laserBar.setFillStyle(0x00ffff); // Full cyan
+            this.laserBar.setAlpha(1);
+        } else if (chargePercent >= 50) {
+            this.laserBar.setFillStyle(0x0088ff); // Blue
+            this.laserBar.setAlpha(0.8);
+        } else {
+            this.laserBar.setFillStyle(0x004488); // Dark blue
+            this.laserBar.setAlpha(0.6);
         }
     }
     

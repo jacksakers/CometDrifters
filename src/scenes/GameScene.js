@@ -1,5 +1,6 @@
 import Ship from '../entities/Ship.js';
 import CometManager from '../managers/CometManager.js';
+import AlienManager from '../managers/AlienManager.js';
 import InputManager from '../managers/InputManager.js';
 import * as C from '../config/constants.js';
 
@@ -31,6 +32,10 @@ export default class GameScene extends Phaser.Scene {
         // Initialize managers
         this.inputManager = new InputManager(this);
         this.cometManager = new CometManager(this);
+        this.alienManager = new AlienManager(this);
+        
+        // Projectile list
+        this.projectiles = [];
         
         // Create player ship
         console.log('[GameScene] Creating ship at center:', C.GAME_WIDTH / 2, C.GAME_HEIGHT - 150);
@@ -67,6 +72,13 @@ export default class GameScene extends Phaser.Scene {
         // Listen for ship destruction
         this.events.on('shipDestroyed', this.onShipDestroyed, this);
         
+        // Listen for alien destruction (award points)
+        this.events.on('alienDestroyed', (points) => {
+            const newScore = this.cometManager.score + points;
+            this.cometManager.score = newScore;
+            this.events.emit('updateScore', newScore);
+        });
+        
         // Listen for score changes from docking
         this.events.on('dockedScore', (points) => {
             const newScore = this.cometManager.score + points;
@@ -100,17 +112,48 @@ export default class GameScene extends Phaser.Scene {
      * Setup collision handlers
      */
     setupCollisions() {
-        // Ship collides with comet
         this.matter.world.on('collisionstart', (event) => {
             event.pairs.forEach((pair) => {
                 const { bodyA, bodyB } = pair;
                 
-                // Check if ship hit a comet
+                // Check ship-comet collision (non-lethal now)
                 if (this.isShipCometCollision(bodyA, bodyB)) {
                     this.handleShipCometCollision();
                 }
+                
+                // Check projectile-alien collisions
+                this.handleProjectileAlienCollision(bodyA, bodyB);
+                
+                // Check alien projectile-ship collisions
+                this.handleAlienProjectileShipCollision(bodyA, bodyB);
             });
         });
+    }
+    
+    /**
+     * Handle projectile hitting alien
+     */
+    handleProjectileAlienCollision(bodyA, bodyB) {
+        const projectile = bodyA.projectileRef || bodyB.projectileRef;
+        const alien = bodyA.alienRef || bodyB.alienRef;
+        
+        if (projectile && alien && projectile.owner === 'player' && alien.alive) {
+            alien.takeDamage(projectile.damage);
+            projectile.hit(alien);
+        }
+    }
+    
+    /**
+     * Handle alien projectile hitting ship
+     */
+    handleAlienProjectileShipCollision(bodyA, bodyB) {
+        const projectile = bodyA.projectileRef || bodyB.projectileRef;
+        const ship = bodyA.shipRef || bodyB.shipRef;
+        
+        if (projectile && ship && projectile.owner === 'alien' && ship.alive) {
+            ship.takeDamage(projectile.damage);
+            projectile.hit(ship);
+        }
     }
     
     /**
@@ -162,16 +205,6 @@ export default class GameScene extends Phaser.Scene {
     update(time, delta) {
         if (!this.gameActive) return;
         
-        // Debug: Log camera and ship position every 120 frames
-        if (this.game.loop.frame % 120 === 0 && this.ship) {
-            console.log('[GameScene] Camera:', {
-                x: this.cameras.main.scrollX,
-                y: this.cameras.main.scrollY,
-                shipX: this.ship.body.position.x,
-                shipY: this.ship.body.position.y
-            });
-        }
-        
         // Update starfield with parallax effect
         this.updateStarfield();
         
@@ -179,7 +212,7 @@ export default class GameScene extends Phaser.Scene {
         const inputState = this.inputManager.update(this.ship);
         
         // Update ship
-        if (this.ship) {
+        if (this.ship && this.ship.alive) {
             this.ship.update(inputState, this.cometManager.getComets());
             
             // Manually update camera to follow ship with smooth lerp
@@ -197,6 +230,21 @@ export default class GameScene extends Phaser.Scene {
         
         // Update comet manager
         this.cometManager.update(this.ship);
+        
+        // Update alien manager
+        if (this.ship && this.ship.alive) {
+            this.alienManager.update(this.ship, this.cometManager.getComets());
+        }
+        
+        // Update projectiles
+        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+            const projectile = this.projectiles[i];
+            projectile.update();
+            
+            if (!projectile.alive) {
+                this.projectiles.splice(i, 1);
+            }
+        }
     }
     
     /**
@@ -277,6 +325,13 @@ export default class GameScene extends Phaser.Scene {
         }
         
         this.cometManager.reset();
+        this.alienManager.reset();
+        
+        // Clear projectiles
+        for (let projectile of this.projectiles) {
+            projectile.destroy();
+        }
+        this.projectiles = [];
         
         // Recreate ship
         this.ship = new Ship(
@@ -299,6 +354,7 @@ export default class GameScene extends Phaser.Scene {
     shutdown() {
         this.events.off('shipDestroyed');
         this.events.off('scoreChanged');
+        this.events.off('alienDestroyed');
         
         if (this.inputManager) {
             this.inputManager.destroy();
@@ -306,6 +362,10 @@ export default class GameScene extends Phaser.Scene {
         
         if (this.cometManager) {
             this.cometManager.destroy();
+        }
+        
+        if (this.alienManager) {
+            this.alienManager.destroy();
         }
     }
 }

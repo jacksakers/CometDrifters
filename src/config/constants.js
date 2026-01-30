@@ -95,9 +95,50 @@ export const COLLISION_CATEGORIES = {
     SHIP: 0x0001,
     COMET: 0x0002,
     SENSOR: 0x0004,
-    PROJECTILE: 0x0008
+    PROJECTILE: 0x0008,
+    ALIEN: 0x0010,
+    ALIEN_PROJECTILE: 0x0020
 };
 
 // Comet Physics
 export const COMET_COLLISION_RESTITUTION = 0.6; // Bounciness when comets collide
 export const COMET_COLLISION_FRICTION = 0.1;     // Friction during collision
+
+// Player Combat Settings
+export const SHIP_MAX_HEALTH = 100;
+export const SHIP_START_HEALTH = 100;
+export const LASER_DAMAGE = 15; // Damage per laser hit
+export const LASER_CHARGE_TIME = 120; // Frames to fully charge (2 seconds at 60fps)
+export const LASER_SPEED = 15;
+export const LASER_LIFETIME = 120; // Frames before projectile expires
+export const LASER_COLOR = 0x00ffff;
+export const LASER_CHARGE_COST = 100; // Percentage of charge consumed per shot
+
+// Alien Settings
+export const ALIEN_SIZE = 18;
+export const ALIEN_MASS = 0.8;
+export const ALIEN_FRICTION = 0;
+export const ALIEN_FRICTIONAIR = 0.015;
+export const ALIEN_RESTITUTION = 0.3;
+export const ALIEN_MAX_VELOCITY = 8;
+export const ALIEN_THRUST_FORCE = 0.0012;
+export const ALIEN_ROTATION_SPEED = 0.06;
+export const ALIEN_MAX_HEALTH = 45; // Takes 3 laser hits to kill
+export const ALIEN_COLOR = 0xff3366;
+export const ALIEN_STROKE_COLOR = 0xcc0033;
+export const ALIEN_SPAWN_INTERVAL = 300; // Frames between alien spawns (5 seconds)
+export const ALIEN_SPAWN_VARIANCE = 120; // Random variance in spawn time
+export const MAX_ALIENS = 5; // Maximum aliens on screen
+
+// Alien AI Settings
+export const ALIEN_ATTACK_RANGE = 400; // Distance to start attacking player
+export const ALIEN_FLEE_HEALTH = 15; // Health threshold to flee to comets
+export const ALIEN_SHOOT_COOLDOWN = 90; // Frames between shots
+export const ALIEN_SHOOT_ACCURACY = 0.15; // Radians of inaccuracy
+export const ALIEN_DOCK_PROBABILITY = 0.3; // Chance to dock when near comet
+
+// Alien Projectile Settings
+export const ALIEN_PROJECTILE_DAMAGE = 10;
+export const ALIEN_PROJECTILE_SPEED = 12;
+export const ALIEN_PROJECTILE_COLOR = 0xff6600;
+export const ALIEN_PROJECTILE_LIFETIME = 100;

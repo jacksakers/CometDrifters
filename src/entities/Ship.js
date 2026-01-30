@@ -1,8 +1,9 @@
 import * as C from '../config/constants.js';
+import Projectile from './Projectile.js';
 
 /**
  * Ship Entity - Player-controlled ship with zero-g physics
- * Handles thrust, rotation, fuel management, and docking
+ * Handles thrust, rotation, fuel management, docking, and combat
  */
 export default class Ship {
     constructor(scene, x, y) {
@@ -18,9 +19,12 @@ export default class Ship {
             mass: C.SHIP_MASS,
             collisionFilter: {
                 category: C.COLLISION_CATEGORIES.SHIP,
-                mask: C.COLLISION_CATEGORIES.COMET
+                mask: C.COLLISION_CATEGORIES.COMET | C.COLLISION_CATEGORIES.ALIEN_PROJECTILE
             }
         });
+        
+        // Store reference on body
+        this.body.shipRef = this;
         
         console.log('[Ship] Ship body created:', this.body.position);
         
@@ -33,6 +37,13 @@ export default class Ship {
         this.dockedComet = null;
         this.alive = true;
         this.dockedTime = 0; // Track time docked for scoring
+        
+        // Combat state
+        this.health = C.SHIP_START_HEALTH;
+        this.maxHealth = C.SHIP_MAX_HEALTH;
+        this.laserCharge = 100; // 0-100 percentage
+        this.isCharging = false;
+        this.invulnerableTimer = 0; // Temporary invulnerability after hit
         
         // Thrust particles trail (Phaser 3.60+ API)
         this.thrustEmitter = null; // Will be created when needed
@@ -244,9 +255,25 @@ export default class Ship {
     update(inputState, comets) {
         if (!this.alive) return;
         
+        // Update invulnerability timer
+        if (this.invulnerableTimer > 0) {
+            this.invulnerableTimer--;
+        }
+        
+        // Update laser charging
+        this.updateLaserCharge(inputState);
+        
+        // Handle shooting
+        if (inputState.shoot && this.laserCharge >= C.LASER_CHARGE_COST) {
+            this.shoot();
+        }
+        
         // Handle docking state
         if (this.isDocked) {
             this.updateDocking();
+            
+            // Heal while docked
+            this.health = Math.min(this.maxHealth, this.health + 0.1);
             
             // Allow undocking
             if (inputState.thrust) {
@@ -271,6 +298,104 @@ export default class Ship {
             }
         }
         
+        // Always draw
+        this.draw();
+        
+        // Emit status updates
+        this.scene.events.emit('updateHealth', this.getHealthPercent());
+        this.scene.events.emit('updateLaserCharge', this.laserCharge);
+    }
+    
+    /**
+     * Update laser charging
+     */
+    updateLaserCharge(inputState) {
+        // Charge laser when holding the charge button or when not shooting
+        if (this.laserCharge < 100) {
+            // Charge faster while not moving or docked
+            const chargeRate = this.isDocked ? 2.5 : 1.5;
+            this.laserCharge = Math.min(100, this.laserCharge + chargeRate);
+        }
+    }
+    
+    /**
+     * Shoot laser
+     */
+    shoot() {
+        if (!this.alive || this.isDocked) return;
+        if (this.laserCharge < C.LASER_CHARGE_COST) return;
+        
+        // Consume charge
+        this.laserCharge -= C.LASER_CHARGE_COST;
+        
+        // Create projectile ahead of ship
+        const spawnDist = C.SHIP_SIZE + 15;
+        const x = this.body.position.x + Math.cos(this.body.angle) * spawnDist;
+        const y = this.body.position.y + Math.sin(this.body.angle) * spawnDist;
+        
+        const projectile = new Projectile(
+            this.scene,
+            x, y,
+            this.body.angle,
+            {
+                damage: C.LASER_DAMAGE,
+                speed: C.LASER_SPEED,
+                lifetime: C.LASER_LIFETIME,
+                color: C.LASER_COLOR,
+                owner: 'player'
+            }
+        );
+        
+        // Add to scene's projectile list
+        if (this.scene.projectiles) {
+            this.scene.projectiles.push(projectile);
+        }
+        
+        // Small recoil
+        const recoilForce = -0.001;
+        this.scene.matter.body.applyForce(
+            this.body, 
+            this.body.position, 
+            {
+                x: Math.cos(this.body.angle) * recoilForce,
+                y: Math.sin(this.body.angle) * recoilForce
+            }
+        );
+    }
+    
+    /**
+     * Take damage from enemy
+     */
+    takeDamage(amount) {
+        if (!this.alive || this.invulnerableTimer > 0) return;
+        
+        this.health -= amount;
+        
+        // Brief invulnerability after hit
+        this.invulnerableTimer = 30; // 0.5 seconds at 60fps
+        
+        // Flash effect
+        this.damageFlashTimer = 10;
+        
+        if (this.health <= 0) {
+            this.health = 0;
+            this.destroy('Hit by alien fire');
+        }
+    }
+    
+    /**
+     * Get health percentage
+     */
+    getHealthPercent() {
+        return (this.health / this.maxHealth) * 100;
+    }
+    
+    /**
+     * Get laser charge percentage
+     */
+    getLaserChargePercent() {
+        return this.laserCharge;
+        
         // Check fuel depletion
         if (this.fuel <= 0 && !this.isDocked) {
             this.destroy('Out of Fuel');
@@ -293,16 +418,26 @@ export default class Ship {
         const y = this.body.position.y;
         const angle = this.body.angle;
         
-        // Debug: Log ship position every 60 frames
-        if (this.scene.game.loop.frame % 60 === 0) {
-            console.log('[Ship] Position:', { x, y, angle });
+        // Update damage flash timer
+        if (this.damageFlashTimer && this.damageFlashTimer > 0) {
+            this.damageFlashTimer--;
+        }
+        
+        // Invulnerability flicker
+        const isFlickering = this.invulnerableTimer > 0 && this.invulnerableTimer % 6 < 3;
+        if (isFlickering) {
+            return; // Skip drawing to create flicker effect
         }
         
         this.graphics.translateCanvas(x, y);
         this.graphics.rotateCanvas(angle);
         
+        // Color based on damage
+        const shipColor = (this.damageFlashTimer && this.damageFlashTimer > 0) ? 
+            0xff0000 : C.SHIP_COLOR;
+        
         // Main body - triangle pointing right (0 radians)
-        this.graphics.fillStyle(C.SHIP_COLOR, 1);
+        this.graphics.fillStyle(shipColor, 1);
         this.graphics.lineStyle(2, C.SHIP_STROKE_COLOR, 1);
         
         this.graphics.beginPath();
