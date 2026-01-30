@@ -15,18 +15,43 @@ export default class CometManager {
     
     /**
      * Spawn a new comet from all directions
-     * Comets pass through the play area
-     * Uses world coordinates (host's ship position) for consistent multiplayer spawning
+     * Comets spawn around ALL active players
      */
     spawnComet() {
-        // Get world center position (use host's ship position if available, otherwise origin)
-        let centerX = 0;
-        let centerY = 0;
+        // Get all active player positions
+        const playerPositions = [];
         
-        if (this.scene.ship && this.scene.ship.alive) {
-            centerX = this.scene.ship.body.position.x;
-            centerY = this.scene.ship.body.position.y;
+        if (this.scene.multiplayerManager && this.scene.multiplayerManager.isMultiplayerActive()) {
+            // Get all ships (local + remote)
+            const allShips = this.scene.multiplayerManager.getAllShips();
+            for (const ship of allShips) {
+                if (ship.alive) {
+                    playerPositions.push({
+                        x: ship.body.position.x,
+                        y: ship.body.position.y
+                    });
+                }
+            }
+        } else if (this.scene.ship && this.scene.ship.alive) {
+            // Single player mode
+            playerPositions.push({
+                x: this.scene.ship.body.position.x,
+                y: this.scene.ship.body.position.y
+            });
         }
+        
+        // If no players, use world center
+        if (playerPositions.length === 0) {
+            playerPositions.push({ 
+                x: this.scene.worldCenterX || 0, 
+                y: this.scene.worldCenterY || 0 
+            });
+        }
+        
+        // Pick a random player to spawn around
+        const targetPlayer = playerPositions[Math.floor(Math.random() * playerPositions.length)];
+        const centerX = targetPlayer.x;
+        const centerY = targetPlayer.y;
         
         // Spawn distance from center (far enough to not pop in)
         const spawnDistance = 1500;
@@ -168,10 +193,22 @@ export default class CometManager {
             this.spawnComet();
         }
         
-        // Spawn comets ahead of fast-moving player (less frequently)
+        // Spawn comets ahead of all fast-moving players (less frequently)
         // Check every 30 frames to avoid over-spawning
-        if (ship && this.scene.game.loop.frame % 30 === 0 && this.comets.length < C.MAX_COMETS_ON_SCREEN - 2) {
-            this.spawnAheadOfPlayer(ship);
+        if (this.scene.game.loop.frame % 30 === 0 && this.comets.length < C.MAX_COMETS_ON_SCREEN - 2) {
+            // Get all active players
+            let playersToCheck = [];
+            if (this.scene.multiplayerManager && this.scene.multiplayerManager.isMultiplayerActive()) {
+                playersToCheck = this.scene.multiplayerManager.getAllShips().filter(s => s.alive);
+            } else if (ship && ship.alive) {
+                playersToCheck = [ship];
+            }
+            
+            // Spawn ahead of a random fast-moving player
+            if (playersToCheck.length > 0) {
+                const randomPlayer = playersToCheck[Math.floor(Math.random() * playersToCheck.length)];
+                this.spawnAheadOfPlayer(randomPlayer);
+            }
         }
         
         // Update existing comets
@@ -184,13 +221,9 @@ export default class CometManager {
                 comet.applyGravity(ship);
             }
             
-            // Remove comets that are very far from world center (host's ship)
-            let centerX = 0;
-            let centerY = 0;
-            if (ship && ship.alive) {
-                centerX = ship.body.position.x;
-                centerY = ship.body.position.y;
-            }
+            // Remove comets that are very far from world center
+            const centerX = this.scene.worldCenterX || 0;
+            const centerY = this.scene.worldCenterY || 0;
             
             const dx = comet.body.position.x - centerX;
             const dy = comet.body.position.y - centerY;

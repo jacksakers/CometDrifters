@@ -21,24 +21,48 @@ export default class AlienManager {
     }
     
     /**
-     * Spawn alien at edge of play area
-     * Uses world coordinates (host's ship position) for consistent multiplayer spawning
+     * Spawn alien near active players
      */
     spawnAlien() {
         // Don't spawn if at max
         if (this.aliens.length >= C.MAX_ALIENS) return;
         
-        // Get world center position (use host's ship if available)
-        let centerX = 0;
-        let centerY = 0;
+        // Get all active player positions
+        const playerPositions = [];
         
-        // Try to get host's ship position
-        if (this.scene.ship && this.scene.ship.alive) {
-            centerX = this.scene.ship.body.position.x;
-            centerY = this.scene.ship.body.position.y;
+        if (this.scene.multiplayerManager && this.scene.multiplayerManager.isMultiplayerActive()) {
+            // Get all ships (local + remote)
+            const allShips = this.scene.multiplayerManager.getAllShips();
+            for (const ship of allShips) {
+                if (ship.alive) {
+                    playerPositions.push({
+                        x: ship.body.position.x,
+                        y: ship.body.position.y
+                    });
+                }
+            }
+        } else if (this.scene.ship && this.scene.ship.alive) {
+            // Single player mode
+            playerPositions.push({
+                x: this.scene.ship.body.position.x,
+                y: this.scene.ship.body.position.y
+            });
         }
         
-        // Spawn at random angle around world center
+        // If no players, use world center
+        if (playerPositions.length === 0) {
+            playerPositions.push({ 
+                x: this.scene.worldCenterX || 0, 
+                y: this.scene.worldCenterY || 0 
+            });
+        }
+        
+        // Pick a random player to spawn near
+        const targetPlayer = playerPositions[Math.floor(Math.random() * playerPositions.length)];
+        const centerX = targetPlayer.x;
+        const centerY = targetPlayer.y;
+        
+        // Spawn at random angle around player
         const spawnDistance = 800;
         const angle = Math.random() * Math.PI * 2;
         
@@ -74,13 +98,8 @@ export default class AlienManager {
             
             // Check if way off from world center
             const pos = alien.body.position;
-            let centerX = 0;
-            let centerY = 0;
-            
-            if (player && player.alive) {
-                centerX = player.body.position.x;
-                centerY = player.body.position.y;
-            }
+            const centerX = this.scene.worldCenterX || 0;
+            const centerY = this.scene.worldCenterY || 0;
             
             const buffer = 2000; // Large buffer
             const dx = pos.x - centerX;

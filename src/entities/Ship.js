@@ -11,9 +11,22 @@ export default class Ship {
         this.isLocal = isLocal; // Is this the local player?
         this.playerState = playerState; // Playroom player state (for multiplayer)
         this.playerName = playerState ? (playerState.getState('name') || 'Player') : 'Player';
-        this.playerColor = playerState ? (playerState.getProfile().color.hex || C.SHIP_COLOR) : C.SHIP_COLOR;
         
-        console.log('[Ship] Creating ship at:', { x, y }, isLocal ? '(local)' : '(remote)');
+        // Safely get player color with fallback
+        let color = C.SHIP_COLOR;
+        if (playerState) {
+            try {
+                const profile = playerState.getProfile();
+                if (profile && profile.color && profile.color.hex) {
+                    color = profile.color.hex;
+                }
+            } catch (e) {
+                console.warn('[Ship] Could not get player color, using default:', e);
+            }
+        }
+        this.playerColor = color;
+        
+        console.log('[Ship] Creating ship at:', { x, y }, isLocal ? '(local)' : '(remote)', 'color:', this.playerColor);
         
         // Create ship body with Matter.js
         this.body = scene.matter.add.circle(x, y, C.SHIP_SIZE, {
@@ -534,14 +547,6 @@ export default class Ship {
      */
     getLaserChargePercent() {
         return this.laserCharge;
-        
-        // Check fuel depletion
-        if (this.fuel <= 0 && !this.isDocked) {
-            this.destroy('Out of Fuel');
-        }
-        
-        // Draw ship
-        this.draw();
     }
     
     /**
@@ -652,20 +657,103 @@ export default class Ship {
     }
     
     /**
+     * Respawn the ship at a safe location
+     */
+    respawn() {
+        console.log('[Ship] Respawning player:', this.playerName);
+        
+        // Find a safe spawn location near world center but away from comets
+        let spawnX = this.scene.worldCenterX || 0;
+        let spawnY = this.scene.worldCenterY || 0;
+        
+        // Try to find empty space
+        let attempts = 0;
+        let foundSafeSpot = false;
+        
+        while (!foundSafeSpot && attempts < 10) {
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 200 + Math.random() * 400;
+            spawnX = (this.scene.worldCenterX || 0) + Math.cos(angle) * distance;
+            spawnY = (this.scene.worldCenterY || 0) + Math.sin(angle) * distance;
+            
+            // Check if far enough from comets
+            const comets = this.scene.cometManager.getComets();
+            let tooClose = false;
+            for (const comet of comets) {
+                const dx = comet.body.position.x - spawnX;
+                const dy = comet.body.position.y - spawnY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < comet.radius + 200) {
+                    tooClose = true;
+                    break;
+                }
+            }
+            
+            if (!tooClose) {
+                foundSafeSpot = true;
+            }
+            attempts++;
+        }
+        
+        // Reset ship state
+        this.alive = true;
+        this.health = C.SHIP_START_HEALTH;
+        this.fuel = C.SHIP_START_FUEL;
+        this.fuelDepletedTimer = 0;
+        this.isDocked = false;
+        this.dockedComet = null;
+        this.dockedTime = 0;
+        this.laserCharge = 0;
+        this.isCharging = false;
+        this.invulnerableTimer = 60; // 1 second of invulnerability
+        this.lockedTarget = null;
+        
+        // Recreate physics body at new position
+        if (this.body) {
+            this.scene.matter.world.remove(this.body);
+        }
+        
+        this.body = this.scene.matter.add.circle(spawnX, spawnY, C.SHIP_SIZE, {
+            friction: C.SHIP_FRICTION,
+            frictionAir: C.SHIP_FRICTIONAIR,
+            restitution: C.SHIP_RESTITUTION,
+            mass: C.SHIP_MASS,
+            collisionFilter: {
+                category: C.COLLISION_CATEGORIES.SHIP,
+                mask: C.COLLISION_CATEGORIES.COMET | C.COLLISION_CATEGORIES.ALIEN_PROJECTILE | C.COLLISION_CATEGORIES.PROJECTILE
+            }
+        });
+        
+        // Store reference on body
+        this.body.shipRef = this;
+        
+        // Recreate graphics
+        if (this.graphics) {
+            this.graphics.clear();
+        } else {
+            this.graphics = this.scene.add.graphics();
+        }
+        
+        // Emit respawn event
+        this.scene.events.emit('shipRespawned', this);
+        
+        console.log('[Ship] Respawned at:', spawnX, spawnY);
+    }
+    
+    /**
      * Destroy ship with explosion
      */
     destroy(reason = 'Destroyed') {
         if (!this.alive) return;
         
         this.alive = false;
-        this.scene.events.emit('shipDestroyed', reason);
+        this.scene.events.emit('shipDestroyed', { ship: this, reason: reason });
         
         // Create explosion
         this.createExplosion();
         
-        // Hide graphics
+        // Hide graphics (but don't destroy or remove body yet - let respawn handle it)
         this.graphics.clear();
-        this.scene.matter.world.remove(this.body);
     }
     
     /**

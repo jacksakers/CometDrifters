@@ -35,9 +35,9 @@ export default class MultiplayerManager {
         try {
             console.log('[Multiplayer] Initializing Playroom Kit...');
             
-            // Start Playroom - show lobby UI
+            // Start Playroom - players join directly without lobby
             await insertCoin({
-                skipLobby: false,
+                skipLobby: true,
                 maxPlayersPerRoom: 8,
                 defaultPlayerStates: {
                     x: C.GAME_WIDTH / 2,
@@ -46,8 +46,8 @@ export default class MultiplayerManager {
                     score: 0,
                     health: C.SHIP_START_HEALTH,
                     fuel: C.SHIP_START_FUEL,
-                    alive: true,
-                    name: this.generateRandomName()
+                    alive: true
+                    // name is set per-player in handlePlayerJoin
                 }
             });
             
@@ -57,10 +57,9 @@ export default class MultiplayerManager {
             const me = myPlayer();
             this.localPlayerId = me.id;
             
-            // Set random name for local player if not set
-            if (!me.getState('name')) {
-                me.setState('name', this.generateRandomName(), true);
-            }
+            // Set random name for local player (always generate fresh)
+            me.setState('name', this.generateRandomName(), true);
+            console.log('[Multiplayer] Local player name set to:', me.getState('name'));
             
             // Listen for players joining
             onPlayerJoin((playerState) => {
@@ -101,9 +100,17 @@ export default class MultiplayerManager {
         
         console.log('[Multiplayer] Player joined:', playerId, isLocal ? '(local)' : '(remote)');
         
+        // Set unique name for each player if not already set
+        if (!playerState.getState('name')) {
+            const newName = this.generateRandomName();
+            playerState.setState('name', newName, true);
+            console.log('[Multiplayer] Set name for player', playerId, ':', newName);
+        }
+        
         // Notify UI of player join
         if (!isLocal) {
-            const playerName = playerState.getState('name') || this.generateRandomName();
+            const playerName = playerState.getState('name');
+            console.log('[Multiplayer] Remote player name:', playerName);
             this.scene.events.emit('playerJoined', playerName);
         }
         
@@ -176,6 +183,11 @@ export default class MultiplayerManager {
         const cometData = this.scene.cometManager.serializeComets();
         setState('comets', cometData, false); // Use unreliable for faster sync
         
+        // Debug log occasionally
+        if (Math.random() < 0.01) { // 1% chance to log
+            console.log('[Host] Syncing:', cometData.length, 'comets,', this.scene.alienManager.getAliens().length, 'aliens,', this.scene.projectiles.length, 'projectiles');
+        }
+        
         // Serialize all aliens
         const alienData = this.scene.alienManager.serializeAliens();
         setState('aliens', alienData, false);
@@ -192,6 +204,10 @@ export default class MultiplayerManager {
             age: proj.age
         }));
         setState('projectiles', projectileData, false);
+        
+        // Sync world center
+        setState('worldCenterX', this.scene.worldCenterX || 0, false);
+        setState('worldCenterY', this.scene.worldCenterY || 0, false);
     }
     
     /**
@@ -268,6 +284,10 @@ export default class MultiplayerManager {
         if (!isHost()) {
             const cometData = getState('comets');
             if (cometData && Array.isArray(cometData)) {
+                // Debug log occasionally
+                if (Math.random() < 0.01) { // 1% chance to log
+                    console.log('[Client] Received:', cometData.length, 'comets from host');
+                }
                 this.scene.cometManager.syncFromNetwork(cometData);
             }
             
@@ -281,6 +301,14 @@ export default class MultiplayerManager {
             const projectileData = getState('projectiles');
             if (projectileData && Array.isArray(projectileData)) {
                 this.scene.syncProjectilesFromNetwork(projectileData);
+            }
+            
+            // Sync world center from host
+            const worldCenterX = getState('worldCenterX');
+            const worldCenterY = getState('worldCenterY');
+            if (worldCenterX !== undefined && worldCenterY !== undefined) {
+                this.scene.worldCenterX = worldCenterX;
+                this.scene.worldCenterY = worldCenterY;
             }
         }
     }

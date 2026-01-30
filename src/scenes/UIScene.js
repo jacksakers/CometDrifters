@@ -34,6 +34,8 @@ export default class UIScene extends Phaser.Scene {
         this.gameScene.events.on('gameReset', this.hideGameOver, this);
         this.gameScene.events.on('updateLeaderboard', this.updateLeaderboard, this);
         this.gameScene.events.on('playerJoined', this.showPlayerJoinNotification, this);
+        this.gameScene.events.on('showDeathMessage', this.showDeathMessage, this);
+        this.gameScene.events.on('hideDeathMessage', this.hideDeathMessage, this);
     }
     
     /**
@@ -743,6 +745,89 @@ export default class UIScene extends Phaser.Scene {
         // Process queue if no notification is showing
         if (!this.currentNotification) {
             this.showNextNotification();
+        }
+    }
+    
+    /**
+     * Show death message in multiplayer (respawn countdown)
+     */
+    showDeathMessage(reason) {
+        const centerX = C.GAME_WIDTH / 2;
+        const centerY = C.GAME_HEIGHT / 2;
+        
+        // Create death message container
+        this.deathMessageContainer = this.add.container(0, 0);
+        this.deathMessageContainer.setDepth(10000);
+        
+        // Background overlay
+        const overlay = this.add.graphics();
+        overlay.fillStyle(0x000000, 0.6);
+        overlay.fillRect(0, 0, C.GAME_WIDTH, C.GAME_HEIGHT);
+        
+        // Death title
+        const title = this.add.text(
+            centerX,
+            centerY - 40,
+            'YOU DIED',
+            {
+                fontFamily: C.UI_FONT_FAMILY,
+                fontSize: '48px',
+                color: '#ff4d4d',
+                fontStyle: 'bold'
+            }
+        ).setOrigin(0.5);
+        
+        // Reason
+        const reasonText = this.add.text(
+            centerX,
+            centerY + 10,
+            reason,
+            {
+                fontFamily: C.UI_FONT_FAMILY,
+                fontSize: '20px',
+                color: '#ffffff',
+                alpha: 0.8
+            }
+        ).setOrigin(0.5);
+        
+        // Respawn message
+        const respawnText = this.add.text(
+            centerX,
+            centerY + 50,
+            'Respawning in 2 seconds...',
+            {
+                fontFamily: C.UI_FONT_FAMILY,
+                fontSize: '16px',
+                color: '#4ade80',
+                alpha: 0.9
+            }
+        ).setOrigin(0.5);
+        
+        this.deathMessageContainer.add([overlay, title, reasonText, respawnText]);
+        
+        // Fade in
+        this.deathMessageContainer.setAlpha(0);
+        this.tweens.add({
+            targets: this.deathMessageContainer,
+            alpha: 1,
+            duration: 200
+        });
+    }
+    
+    /**
+     * Hide death message
+     */
+    hideDeathMessage() {
+        if (this.deathMessageContainer) {
+            this.tweens.add({
+                targets: this.deathMessageContainer,
+                alpha: 0,
+                duration: 300,
+                onComplete: () => {
+                    this.deathMessageContainer.destroy();
+                    this.deathMessageContainer = null;
+                }
+            });
         }
     }
     

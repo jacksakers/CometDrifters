@@ -69,6 +69,11 @@ export default class GameScene extends Phaser.Scene {
         // Game state
         this.gameActive = true;
         
+        // World center tracking (persistent origin for spawning)
+        // Initialize to starting position, then track average of all players
+        this.worldCenterX = C.GAME_WIDTH / 2;
+        this.worldCenterY = C.GAME_HEIGHT - 150;
+        
         // Start UI scene if not already started
         if (!this.scene.isActive('UIScene')) {
             this.scene.launch('UIScene');
@@ -122,7 +127,17 @@ export default class GameScene extends Phaser.Scene {
         // Create name text for remote players
         if (!isLocal && playerState) {
             const playerName = playerState.getState('name') || 'Player';
-            const color = playerState.getProfile().color.hexString || '#3b82f6';
+            
+            // Safely get player color with fallback
+            let color = '#3b82f6';
+            try {
+                const profile = playerState.getProfile();
+                if (profile && profile.color && profile.color.hexString) {
+                    color = profile.color.hexString;
+                }
+            } catch (e) {
+                console.warn('[GameScene] Could not get player color for name text, using default');
+            }
             
             const nameText = this.add.text(0, 0, playerName, {
                 fontFamily: C.UI_FONT_FAMILY,
@@ -256,16 +271,42 @@ export default class GameScene extends Phaser.Scene {
     /**
      * Handle ship destruction
      */
-    onShipDestroyed(reason) {
-        this.gameActive = false;
+    onShipDestroyed(data) {
+        const { ship, reason } = data;
         
-        // Emit game over event to UI
-        this.time.delayedCall(1000, () => {
-            this.events.emit('gameOver', {
-                reason: reason,
-                score: this.cometManager.getScore()
+        // In multiplayer, respawn after a delay
+        if (this.multiplayerManager && this.multiplayerManager.isMultiplayerActive()) {
+            console.log('[GameScene] Ship destroyed in multiplayer, respawning...', reason);
+            
+            // Show death message briefly
+            if (ship.isLocal) {
+                this.events.emit('showDeathMessage', reason);
+            }
+            
+            // Respawn after 2 seconds
+            this.time.delayedCall(2000, () => {
+                if (ship && !ship.alive) {
+                    ship.respawn();
+                    
+                    // Update health and fuel UI
+                    if (ship.isLocal) {
+                        this.events.emit('updateHealth', ship.getHealthPercent());
+                        this.events.emit('updateFuel', ship.getFuelPercent());
+                        this.events.emit('hideDeathMessage');
+                    }
+                }
             });
-        });
+        } else {
+            // Single player - game over
+            this.gameActive = false;
+            
+            this.time.delayedCall(1000, () => {
+                this.events.emit('gameOver', {
+                    reason: reason,
+                    score: this.cometManager.getScore()
+                });
+            });
+        }
     }
     
     /**
@@ -273,6 +314,9 @@ export default class GameScene extends Phaser.Scene {
      */
     update(time, delta) {
         if (!this.gameActive) return;
+        
+        // Update world center based on active players
+        this.updateWorldCenter();
         
         // Update starfield with parallax effect
         this.updateStarfield();
@@ -329,8 +373,9 @@ export default class GameScene extends Phaser.Scene {
         if (isHost()) {
             this.cometManager.update(this.ship);
         } else {
-            // Clients just update positions and draw
-            for (let comet of this.cometManager.getComets()) {
+            // Clients just update positions and draw (update calls draw internally)
+            const comets = this.cometManager.getComets();
+            for (let comet of comets) {
                 comet.update();
             }
         }
@@ -341,13 +386,14 @@ export default class GameScene extends Phaser.Scene {
                 this.alienManager.update(this.ship, this.cometManager.getComets());
             }
         } else {
-            // Clients just update and draw
-            for (let alien of this.alienManager.getAliens()) {
+            // Clients just update and draw (update calls draw internally)
+            const aliens = this.alienManager.getAliens();
+            for (let alien of aliens) {
                 alien.update(this.ship, this.cometManager.getComets());
             }
         }
         
-        // Update projectiles (all clients)
+        // Update projectiles (all clients - update calls draw internally)
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             const projectile = this.projectiles[i];
             projectile.update();
@@ -411,6 +457,39 @@ export default class GameScene extends Phaser.Scene {
                 delete this.starGrid[gridKey];
             }
         }
+    }
+    
+    /**
+     * Update world center based on active players
+     */
+    updateWorldCenter() {
+        // Calculate average position of all alive players
+        const allShips = this.multiplayerManager ? this.multiplayerManager.getAllShips() : [];
+        
+        if (allShips.length === 0 && this.ship && this.ship.alive) {
+            // Single player or only local ship
+            this.worldCenterX = this.ship.body.position.x;
+            this.worldCenterY = this.ship.body.position.y;
+        } else if (allShips.length > 0) {
+            // Multiplayer - use average of all alive players
+            let sumX = 0;
+            let sumY = 0;
+            let count = 0;
+            
+            for (const ship of allShips) {
+                if (ship.alive) {
+                    sumX += ship.body.position.x;
+                    sumY += ship.body.position.y;
+                    count++;
+                }
+            }
+            
+            if (count > 0) {
+                this.worldCenterX = sumX / count;
+                this.worldCenterY = sumY / count;
+            }
+        }
+        // If no alive players, keep last known world center
     }
     
     /**
