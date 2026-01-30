@@ -19,6 +19,9 @@ export default class UIScene extends Phaser.Scene {
         this.createFuelGauge();
         this.createControlsHint();
         this.createGameOverScreen();
+        this.createLeaderboard();
+        this.createNotificationSystem();
+        this.createPlayerTracking();
         
         // Listen to game events
         this.gameScene.events.on('updateScore', this.updateScore, this);
@@ -29,6 +32,8 @@ export default class UIScene extends Phaser.Scene {
         this.gameScene.events.on('lockOnTarget', this.updateLockOn, this);
         this.gameScene.events.on('gameOver', this.showGameOver, this);
         this.gameScene.events.on('gameReset', this.hideGameOver, this);
+        this.gameScene.events.on('updateLeaderboard', this.updateLeaderboard, this);
+        this.gameScene.events.on('playerJoined', this.showPlayerJoinNotification, this);
     }
     
     /**
@@ -568,6 +573,349 @@ export default class UIScene extends Phaser.Scene {
      */
     hideGameOver() {
         this.gameOverContainer.setVisible(false);
+    }
+    
+    /**
+     * Create leaderboard (hidden by default, shows when multiplayer active)
+     */
+    createLeaderboard() {
+        const rightX = C.GAME_WIDTH - C.UI_PADDING;
+        const topY = 100;
+        
+        // Leaderboard container
+        this.leaderboardContainer = this.add.container(0, 0);
+        this.leaderboardContainer.setAlpha(0); // Hidden by default
+        
+        // Background
+        const bgWidth = 220;
+        const bgHeight = 300;
+        const bg = this.add.graphics();
+        bg.fillStyle(0x000000, 0.7);
+        bg.fillRoundedRect(rightX - bgWidth, topY, bgWidth, bgHeight, 8);
+        bg.lineStyle(2, 0x4ade80, 0.5);
+        bg.strokeRoundedRect(rightX - bgWidth, topY, bgWidth, bgHeight, 8);
+        this.leaderboardContainer.add(bg);
+        
+        // Title
+        const title = this.add.text(
+            rightX - bgWidth / 2, 
+            topY + 15, 
+            'LEADERBOARD', 
+            {
+                fontFamily: C.UI_FONT_FAMILY,
+                fontSize: '16px',
+                color: '#4ade80',
+                fontStyle: 'bold'
+            }
+        ).setOrigin(0.5, 0);
+        this.leaderboardContainer.add(title);
+        
+        // Player entries (will be created dynamically)
+        this.leaderboardEntries = [];
+        this.leaderboardStartY = topY + 45;
+        this.leaderboardX = rightX - bgWidth + 15;
+    }
+    
+    /**
+     * Create notification system
+     */
+    createNotificationSystem() {
+        this.notificationQueue = [];
+        this.currentNotification = null;
+    }
+    
+    /**
+     * Create player tracking arrows (will be shown in update loop)
+     */
+    createPlayerTracking() {
+        this.playerArrows = new Map(); // Map of ship -> arrow graphics
+    }
+    
+    /**
+     * Update leaderboard with player data
+     */
+    updateLeaderboard(leaderboardData) {
+        // Clear existing entries
+        for (const entry of this.leaderboardEntries) {
+            entry.destroy();
+        }
+        this.leaderboardEntries = [];
+        
+        // Show leaderboard if multiplayer is active
+        if (leaderboardData.length > 1) {
+            this.tweens.add({
+                targets: this.leaderboardContainer,
+                alpha: 1,
+                duration: 300
+            });
+        } else {
+            this.tweens.add({
+                targets: this.leaderboardContainer,
+                alpha: 0,
+                duration: 300
+            });
+            return;
+        }
+        
+        // Create entries for each player
+        leaderboardData.forEach((player, index) => {
+            const y = this.leaderboardStartY + index * 30;
+            
+            // Rank
+            const rankText = this.add.text(
+                this.leaderboardX, 
+                y, 
+                `${index + 1}.`, 
+                {
+                    fontFamily: C.UI_FONT_FAMILY,
+                    fontSize: '14px',
+                    color: '#ffffff',
+                    alpha: 0.8
+                }
+            ).setOrigin(0, 0);
+            
+            // Player name with indicator for local player
+            const nameColor = player.isLocal ? '#f9cb28' : '#ffffff';
+            const namePrefix = player.isLocal ? '► ' : '';
+            const nameText = this.add.text(
+                this.leaderboardX + 25, 
+                y, 
+                `${namePrefix}${player.name}`, 
+                {
+                    fontFamily: C.UI_FONT_FAMILY,
+                    fontSize: '13px',
+                    color: nameColor,
+                    fontStyle: player.isLocal ? 'bold' : 'normal'
+                }
+            ).setOrigin(0, 0);
+            
+            // Score
+            const scoreText = this.add.text(
+                this.leaderboardX + 180, 
+                y, 
+                player.score.toString(), 
+                {
+                    fontFamily: C.UI_FONT_FAMILY,
+                    fontSize: '13px',
+                    color: '#4ade80',
+                    fontStyle: 'bold'
+                }
+            ).setOrigin(1, 0);
+            
+            // Status indicator (alive/dead)
+            if (!player.alive) {
+                nameText.setAlpha(0.4);
+                scoreText.setAlpha(0.4);
+                rankText.setAlpha(0.4);
+                
+                const deadText = this.add.text(
+                    this.leaderboardX + 25,
+                    y + 15,
+                    '[DESTROYED]',
+                    {
+                        fontFamily: C.UI_FONT_FAMILY,
+                        fontSize: '10px',
+                        color: '#ff0000',
+                        alpha: 0.6
+                    }
+                ).setOrigin(0, 0);
+                
+                this.leaderboardEntries.push(deadText);
+            }
+            
+            this.leaderboardEntries.push(rankText, nameText, scoreText);
+            this.leaderboardContainer.add([rankText, nameText, scoreText]);
+        });
+    }
+    
+    /**
+     * Show player join notification
+     */
+    showPlayerJoinNotification(playerName) {
+        const notification = {
+            text: `${playerName} joined!`,
+            color: '#4ade80',
+            duration: 3000
+        };
+        
+        this.notificationQueue.push(notification);
+        
+        // Process queue if no notification is showing
+        if (!this.currentNotification) {
+            this.showNextNotification();
+        }
+    }
+    
+    /**
+     * Show next notification in queue
+     */
+    showNextNotification() {
+        if (this.notificationQueue.length === 0) {
+            this.currentNotification = null;
+            return;
+        }
+        
+        const notification = this.notificationQueue.shift();
+        
+        const centerX = C.GAME_WIDTH / 2;
+        const y = 120;
+        
+        // Create notification background
+        const bg = this.add.graphics();
+        bg.fillStyle(0x000000, 0.8);
+        bg.fillRoundedRect(centerX - 150, y - 15, 300, 40, 8);
+        bg.lineStyle(2, notification.color === '#4ade80' ? 0x4ade80 : 0xff6600, 1);
+        bg.strokeRoundedRect(centerX - 150, y - 15, 300, 40, 8);
+        
+        // Create notification text
+        const text = this.add.text(
+            centerX, 
+            y + 5, 
+            notification.text, 
+            {
+                fontFamily: C.UI_FONT_FAMILY,
+                fontSize: '16px',
+                color: notification.color,
+                fontStyle: 'bold'
+            }
+        ).setOrigin(0.5);
+        
+        this.currentNotification = { bg, text };
+        
+        // Animate in
+        bg.setAlpha(0);
+        text.setAlpha(0);
+        
+        this.tweens.add({
+            targets: [bg, text],
+            alpha: 1,
+            duration: 300,
+            onComplete: () => {
+                // Wait then fade out
+                this.time.delayedCall(notification.duration, () => {
+                    this.tweens.add({
+                        targets: [bg, text],
+                        alpha: 0,
+                        duration: 300,
+                        onComplete: () => {
+                            bg.destroy();
+                            text.destroy();
+                            this.showNextNotification();
+                        }
+                    });
+                });
+            }
+        });
+    }
+    
+    /**
+     * Update - called every frame
+     */
+    update() {
+        this.updatePlayerTrackingArrows();
+    }
+    
+    /**
+     * Update player tracking arrows to point at remote players
+     */
+    updatePlayerTrackingArrows() {
+        if (!this.gameScene.multiplayerManager || !this.gameScene.ship || !this.gameScene.ship.alive) {
+            // Clear all arrows if no multiplayer or local ship
+            for (const arrow of this.playerArrows.values()) {
+                arrow.setVisible(false);
+            }
+            return;
+        }
+        
+        const localShip = this.gameScene.ship;
+        const remotePlayers = this.gameScene.multiplayerManager.getRemoteShips();
+        const cam = this.gameScene.cameras.main;
+        
+        // Track which arrows are used
+        const usedArrows = new Set();
+        
+        // For each remote player
+        remotePlayers.forEach((remoteShip, index) => {
+            if (!remoteShip.alive) return;
+            
+            // Get or create arrow for this ship
+            let arrow = this.playerArrows.get(remoteShip);
+            if (!arrow) {
+                arrow = this.add.graphics();
+                this.playerArrows.set(remoteShip, arrow);
+            }
+            
+            usedArrows.add(arrow);
+            
+            // Calculate relative position
+            const dx = remoteShip.body.position.x - localShip.body.position.x;
+            const dy = remoteShip.body.position.y - localShip.body.position.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Only show arrow if player is far away (off-screen or distant)
+            const showArrowDistance = 600; // Show arrow when > 600 units away
+            
+            if (distance < showArrowDistance) {
+                arrow.setVisible(false);
+                return;
+            }
+            
+            arrow.setVisible(true);
+            
+            // Calculate angle to remote player
+            const angle = Math.atan2(dy, dx);
+            
+            // Position arrow at edge of screen pointing toward player
+            const screenCenterX = C.GAME_WIDTH / 2;
+            const screenCenterY = C.GAME_HEIGHT / 2;
+            const arrowDistance = 80; // Distance from center of screen
+            
+            const arrowX = screenCenterX + Math.cos(angle) * arrowDistance;
+            const arrowY = screenCenterY + Math.sin(angle) * arrowDistance;
+            
+            // Draw arrow
+            arrow.clear();
+            
+            // Arrow color based on player
+            const color = remoteShip.playerColor || 0x00ffff;
+            arrow.fillStyle(color, 0.8);
+            arrow.lineStyle(2, 0xffffff, 0.6);
+            
+            // Draw triangle pointing in direction
+            const arrowSize = 12;
+            arrow.save();
+            arrow.translateCanvas(arrowX, arrowY);
+            arrow.rotateCanvas(angle);
+            
+            arrow.beginPath();
+            arrow.moveTo(arrowSize, 0); // Tip
+            arrow.lineTo(-arrowSize, -arrowSize * 0.6); // Top wing
+            arrow.lineTo(-arrowSize * 0.5, 0); // Back center
+            arrow.lineTo(-arrowSize, arrowSize * 0.6); // Bottom wing
+            arrow.closePath();
+            arrow.fillPath();
+            arrow.strokePath();
+            
+            arrow.restore();
+            
+            // Draw distance text below arrow
+            const distanceText = `${Math.floor(distance)}`;
+            const textX = arrowX;
+            const textY = arrowY + 20;
+            
+            arrow.fillStyle(0x000000, 0.7);
+            arrow.fillRect(textX - 15, textY - 8, 30, 14);
+            
+            // Note: Can't draw text with graphics, would need Text objects
+            // For now, just the arrow is enough
+        });
+        
+        // Hide unused arrows
+        for (const [ship, arrow] of this.playerArrows) {
+            if (!usedArrows.has(arrow)) {
+                arrow.setVisible(false);
+            }
+        }
     }
     
     /**

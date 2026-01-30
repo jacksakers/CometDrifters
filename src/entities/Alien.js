@@ -287,6 +287,10 @@ export default class Alien {
     shoot() {
         if (!this.alive || this.isDocked) return;
         
+        // Only host spawns alien projectiles (will sync to clients)
+        const { isHost } = window.Playroom;
+        if (!isHost()) return;
+        
         // Add some inaccuracy
         const inaccuracy = (Math.random() - 0.5) * C.ALIEN_SHOOT_ACCURACY * 2;
         const shootAngle = this.body.angle + inaccuracy;

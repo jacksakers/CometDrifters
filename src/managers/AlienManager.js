@@ -21,23 +21,29 @@ export default class AlienManager {
     }
     
     /**
-     * Spawn alien at edge of screen
+     * Spawn alien at edge of play area
+     * Uses world coordinates (host's ship position) for consistent multiplayer spawning
      */
     spawnAlien() {
         // Don't spawn if at max
         if (this.aliens.length >= C.MAX_ALIENS) return;
         
-        // Get camera position
-        const cam = this.scene.cameras.main;
-        const camX = cam.scrollX + cam.width / 2;
-        const camY = cam.scrollY + cam.height / 2;
+        // Get world center position (use host's ship if available)
+        let centerX = 0;
+        let centerY = 0;
         
-        // Spawn at random edge, far from camera
+        // Try to get host's ship position
+        if (this.scene.ship && this.scene.ship.alive) {
+            centerX = this.scene.ship.body.position.x;
+            centerY = this.scene.ship.body.position.y;
+        }
+        
+        // Spawn at random angle around world center
         const spawnDistance = 800;
         const angle = Math.random() * Math.PI * 2;
         
-        const x = camX + Math.cos(angle) * spawnDistance;
-        const y = camY + Math.sin(angle) * spawnDistance;
+        const x = centerX + Math.cos(angle) * spawnDistance;
+        const y = centerY + Math.sin(angle) * spawnDistance;
         
         const alien = new Alien(this.scene, x, y);
         this.aliens.push(alien);
@@ -66,15 +72,22 @@ export default class AlienManager {
                 continue;
             }
             
-            // Check if way off screen
+            // Check if way off from world center
             const pos = alien.body.position;
-            const cam = this.scene.cameras.main;
-            const buffer = 2000; // Large buffer
+            let centerX = 0;
+            let centerY = 0;
             
-            if (pos.x < cam.scrollX - buffer || 
-                pos.x > cam.scrollX + cam.width + buffer ||
-                pos.y < cam.scrollY - buffer || 
-                pos.y > cam.scrollY + cam.height + buffer) {
+            if (player && player.alive) {
+                centerX = player.body.position.x;
+                centerY = player.body.position.y;
+            }
+            
+            const buffer = 2000; // Large buffer
+            const dx = pos.x - centerX;
+            const dy = pos.y - centerY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > buffer * 2) {
                 alien.destroy();
                 this.aliens.splice(i, 1);
                 continue;
@@ -109,5 +122,59 @@ export default class AlienManager {
      */
     destroy() {
         this.reset();
+    }
+    
+    /**
+     * Serialize aliens for network sync
+     */
+    serializeAliens() {
+        return this.aliens.map((alien, index) => ({
+            id: index,
+            x: alien.body.position.x,
+            y: alien.body.position.y,
+            vx: alien.body.velocity.x,
+            vy: alien.body.velocity.y,
+            rotation: alien.body.angle,
+            health: alien.health,
+            isDocked: alien.isDocked,
+            aiState: alien.aiState
+        }));
+    }
+    
+    /**
+     * Sync aliens from network data (clients only)
+     */
+    syncFromNetwork(alienData) {
+        // Remove aliens that no longer exist
+        for (let i = this.aliens.length - 1; i >= 0; i--) {
+            if (i >= alienData.length) {
+                this.aliens[i].destroy();
+                this.aliens.splice(i, 1);
+            }
+        }
+        
+        // Update or create aliens
+        for (let i = 0; i < alienData.length; i++) {
+            const data = alienData[i];
+            
+            if (i < this.aliens.length) {
+                // Update existing alien
+                const alien = this.aliens[i];
+                this.scene.matter.body.setPosition(alien.body, { x: data.x, y: data.y });
+                this.scene.matter.body.setVelocity(alien.body, { x: data.vx, y: data.vy });
+                this.scene.matter.body.setAngle(alien.body, data.rotation);
+                alien.health = data.health;
+                alien.isDocked = data.isDocked;
+                alien.aiState = data.aiState;
+            } else {
+                // Create new alien
+                const alien = new Alien(this.scene, data.x, data.y);
+                alien.health = data.health;
+                alien.isDocked = data.isDocked;
+                alien.aiState = data.aiState;
+                this.scene.matter.body.setAngle(alien.body, data.rotation);
+                this.aliens.push(alien);
+            }
+        }
     }
 }

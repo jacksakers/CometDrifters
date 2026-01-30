@@ -6,10 +6,14 @@ import Projectile from './Projectile.js';
  * Handles thrust, rotation, fuel management, docking, and combat
  */
 export default class Ship {
-    constructor(scene, x, y) {
+    constructor(scene, x, y, isLocal = true, playerState = null) {
         this.scene = scene;
+        this.isLocal = isLocal; // Is this the local player?
+        this.playerState = playerState; // Playroom player state (for multiplayer)
+        this.playerName = playerState ? (playerState.getState('name') || 'Player') : 'Player';
+        this.playerColor = playerState ? (playerState.getProfile().color.hex || C.SHIP_COLOR) : C.SHIP_COLOR;
         
-        console.log('[Ship] Creating ship at:', { x, y });
+        console.log('[Ship] Creating ship at:', { x, y }, isLocal ? '(local)' : '(remote)');
         
         // Create ship body with Matter.js
         this.body = scene.matter.add.circle(x, y, C.SHIP_SIZE, {
@@ -19,7 +23,7 @@ export default class Ship {
             mass: C.SHIP_MASS,
             collisionFilter: {
                 category: C.COLLISION_CATEGORIES.SHIP,
-                mask: C.COLLISION_CATEGORIES.COMET | C.COLLISION_CATEGORIES.ALIEN_PROJECTILE
+                mask: C.COLLISION_CATEGORIES.COMET | C.COLLISION_CATEGORIES.ALIEN_PROJECTILE | C.COLLISION_CATEGORIES.PROJECTILE
             }
         });
         
@@ -457,6 +461,9 @@ export default class Ship {
         if (!this.alive || this.isDocked) return;
         if (this.laserCharge < C.LASER_CHARGE_COST) return;
         
+        // Only local player can shoot (and it will sync to network)
+        if (!this.isLocal) return;
+        
         // Consume charge
         this.laserCharge -= C.LASER_CHARGE_COST;
         
@@ -564,9 +571,10 @@ export default class Ship {
         this.graphics.translateCanvas(x, y);
         this.graphics.rotateCanvas(angle);
         
-        // Color based on damage
+        // Color based on damage and player
+        const baseColor = this.isLocal ? C.SHIP_COLOR : this.playerColor;
         const shipColor = (this.damageFlashTimer && this.damageFlashTimer > 0) ? 
-            0xff0000 : C.SHIP_COLOR;
+            0xff0000 : baseColor;
         
         // Main body - triangle pointing right (0 radians)
         this.graphics.fillStyle(shipColor, 1);
@@ -593,29 +601,52 @@ export default class Ship {
         
         this.graphics.restore();
         
-        // Draw crosshair in front of ship (after restore so it's in world space)
-        const crosshairDistance = C.SHIP_SIZE * 4; // Distance ahead of ship
-        const crosshairX = x + Math.cos(angle) * crosshairDistance;
-        const crosshairY = y + Math.sin(angle) * crosshairDistance;
-        const crosshairSize = 8;
+        // Draw player name above ship
+        if (!this.isLocal && this.playerName) {
+            this.graphics.fillStyle(0xffffff, 0.8);
+            this.graphics.fillStyle(this.playerColor, 0.8);
+            const nameY = y - C.SHIP_SIZE - 15;
+            
+            // Draw text background
+            const textWidth = this.playerName.length * 6;
+            this.graphics.fillStyle(0x000000, 0.6);
+            this.graphics.fillRect(x - textWidth / 2 - 3, nameY - 10, textWidth + 6, 14);
+            
+            // Note: Graphics can't draw text, so we'll add a text object
+            // This will be handled in GameScene instead
+        }
         
-        // Draw crosshair lines
-        this.graphics.lineStyle(2, 0x00ffff, 0.6);
+        // Draw crosshair in front of ship (only for local player)
+        if (this.isLocal) {
+            const crosshairDistance = C.SHIP_SIZE * 4; // Distance ahead of ship
+            const crosshairX = x + Math.cos(angle) * crosshairDistance;
+            const crosshairY = y + Math.sin(angle) * crosshairDistance;
+            const crosshairSize = 8;
+            
+            // Draw crosshair lines
+            this.graphics.lineStyle(2, 0x00ffff, 0.6);
+            
+            // Horizontal line
+            this.graphics.lineBetween(
+                crosshairX - crosshairSize, crosshairY,
+                crosshairX + crosshairSize, crosshairY
+            );
+            
+            // Vertical line
+            this.graphics.lineBetween(
+                crosshairX, crosshairY - crosshairSize,
+                crosshairX, crosshairY + crosshairSize
+            );
+
+            // Optional: Draw a small circle in the center
+            this.graphics.strokeCircle(crosshairX, crosshairY, crosshairSize * 0.5);
+        }
         
-        // Horizontal line
-        this.graphics.lineBetween(
-            crosshairX - crosshairSize, crosshairY,
-            crosshairX + crosshairSize, crosshairY
-        );
-        
-        // Vertical line
-        this.graphics.lineBetween(
-            crosshairX, crosshairY - crosshairSize,
-            crosshairX, crosshairY + crosshairSize
-        );
-        
-        // Optional: Draw a small circle in the center
-        this.graphics.strokeCircle(crosshairX, crosshairY, crosshairSize * 0.5);
+        // Docking indicator
+        if (this.isDocked) {
+            this.graphics.lineStyle(3, 0x4ade80, 1);
+            this.graphics.strokeCircle(x, y, C.SHIP_SIZE * 1.5);
+        }
     }
     
     /**

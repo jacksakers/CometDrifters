@@ -1,7 +1,9 @@
 import Ship from '../entities/Ship.js';
+import Projectile from '../entities/Projectile.js';
 import CometManager from '../managers/CometManager.js';
 import AlienManager from '../managers/AlienManager.js';
 import InputManager from '../managers/InputManager.js';
+import MultiplayerManager from '../managers/MultiplayerManager.js';
 import * as C from '../config/constants.js';
 
 /**
@@ -22,7 +24,7 @@ export default class GameScene extends Phaser.Scene {
         graphics.destroy();
     }
     
-    create() {
+    async create() {
         // Setup Matter.js physics world with expanded bounds
         this.matter.world.setGravity(C.GRAVITY_X, C.GRAVITY_Y);
         
@@ -33,17 +35,20 @@ export default class GameScene extends Phaser.Scene {
         this.inputManager = new InputManager(this);
         this.cometManager = new CometManager(this);
         this.alienManager = new AlienManager(this);
+        this.multiplayerManager = new MultiplayerManager(this);
         
         // Projectile list
         this.projectiles = [];
         
-        // Create player ship
-        console.log('[GameScene] Creating ship at center:', C.GAME_WIDTH / 2, C.GAME_HEIGHT - 150);
-        this.ship = new Ship(
-            this, 
-            C.GAME_WIDTH / 2, 
-            C.GAME_HEIGHT - 150
-        );
+        // Player name text objects (for remote players)
+        this.playerNameTexts = new Map();
+        
+        // Initialize multiplayer (will create ships)
+        console.log('[GameScene] Initializing multiplayer...');
+        await this.multiplayerManager.initialize();
+        
+        // Ship will be set by MultiplayerManager
+        // this.ship = ... (set in handlePlayerJoin via multiplayerManager)
         
         console.log('[GameScene] Ship created, setting up camera');
         console.log('[GameScene] Ship body position:', this.ship.body.position);
@@ -109,12 +114,43 @@ export default class GameScene extends Phaser.Scene {
     }
     
     /**
+     * Create a player ship (called by MultiplayerManager)
+     */
+    createPlayerShip(x, y, isLocal, playerState) {
+        const ship = new Ship(this, x, y, isLocal, playerState);
+        
+        // Create name text for remote players
+        if (!isLocal && playerState) {
+            const playerName = playerState.getState('name') || 'Player';
+            const color = playerState.getProfile().color.hexString || '#3b82f6';
+            
+            const nameText = this.add.text(0, 0, playerName, {
+                fontFamily: C.UI_FONT_FAMILY,
+                fontSize: '12px',
+                color: color,
+                stroke: '#000000',
+                strokeThickness: 3,
+                align: 'center'
+            }).setOrigin(0.5, 0.5).setDepth(1000);
+            
+            this.playerNameTexts.set(ship, nameText);
+        }
+        
+        return ship;
+    }
+    
+    /**
      * Setup collision handlers
      */
     setupCollisions() {
         this.matter.world.on('collisionstart', (event) => {
             event.pairs.forEach((pair) => {
                 const { bodyA, bodyB } = pair;
+                
+                // Check player-player projectile collision
+                if ((bodyA.projectileRef && bodyB.shipRef) || (bodyB.projectileRef && bodyA.shipRef)) {
+                    this.handleProjectileShipCollision(bodyA, bodyB);
+                }
                 
                 // Check ship-comet collision (non-lethal now)
                 if (this.isShipCometCollision(bodyA, bodyB)) {
@@ -131,6 +167,23 @@ export default class GameScene extends Phaser.Scene {
                 this.handleProjectileCometCollision(bodyA, bodyB);
             });
         });
+    }
+    
+    /**
+     * Handle projectile hitting ship (player vs player or alien)
+     */
+    handleProjectileShipCollision(bodyA, bodyB) {
+        const projectile = bodyA.projectileRef || bodyB.projectileRef;
+        const ship = bodyA.shipRef || bodyB.shipRef;
+        
+        if (projectile && ship && ship.alive) {
+            // Don't hit your own ship or if friendly fire is disabled
+            if (projectile.owner === 'player' && ship.isLocal) return;
+            if (projectile.owner === 'alien' && !ship.isLocal) return; // Aliens only hit players
+            
+            ship.takeDamage(projectile.damage);
+            projectile.hit(ship);
+        }
     }
     
     /**
@@ -224,11 +277,16 @@ export default class GameScene extends Phaser.Scene {
         // Update starfield with parallax effect
         this.updateStarfield();
         
-        // Get input state
-        const inputState = this.inputManager.update(this.ship);
+        // Update multiplayer state
+        if (this.multiplayerManager) {
+            this.multiplayerManager.update();
+        }
         
-        // Update ship
-        if (this.ship && this.ship.alive) {
+        // Get input state (only for local player)
+        const inputState = this.ship ? this.inputManager.update(this.ship) : null;
+        
+        // Update local ship
+        if (this.ship && this.ship.alive && this.ship.isLocal) {
             this.ship.update(inputState, this.cometManager.getComets(), this.alienManager.getAliens());
             
             // Manually update camera to follow ship with smooth lerp
@@ -244,15 +302,38 @@ export default class GameScene extends Phaser.Scene {
             this.events.emit('updateDockStatus', this.ship.isDocked);
         }
         
-        // Update comet manager
-        this.cometManager.update(this.ship);
-        
-        // Update alien manager
-        if (this.ship && this.ship.alive) {
-            this.alienManager.update(this.ship, this.cometManager.getComets());
+        // Update remote players (just draw, state comes from network)
+        if (this.multiplayerManager) {
+            const remotePlayers = this.multiplayerManager.getRemoteShips();
+            for (const remoteShip of remotePlayers) {
+                if (remoteShip.alive) {
+                    remoteShip.draw();
+                    
+                    // Update name text position
+                    const nameText = this.playerNameTexts.get(remoteShip);
+                    if (nameText) {
+                        nameText.setPosition(
+                            remoteShip.body.position.x,
+                            remoteShip.body.position.y - C.SHIP_SIZE - 15
+                        );
+                    }
+                }
+            }
         }
         
-        // Update projectiles
+        // Only host spawns comets and aliens
+        const { isHost } = window.Playroom;
+        if (isHost()) {
+            // Update comet manager
+            this.cometManager.update(this.ship);
+            
+            // Update alien manager
+            if (this.ship && this.ship.alive) {
+                this.alienManager.update(this.ship, this.cometManager.getComets());
+            }
+        }
+        
+        // Update projectiles (all clients)
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             const projectile = this.projectiles[i];
             projectile.update();
@@ -362,6 +443,45 @@ export default class GameScene extends Phaser.Scene {
         this.events.emit('updateScore', 0);
         this.events.emit('updateFuel', 100);
         this.events.emit('gameReset');
+    }
+    
+    /**
+     * Sync projectiles from network (clients only)
+     */
+    syncProjectilesFromNetwork(projectileData) {
+        // Remove projectiles that no longer exist
+        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+            if (i >= projectileData.length) {
+                this.projectiles[i].destroy();
+                this.projectiles.splice(i, 1);
+            }
+        }
+        
+        // Update or create projectiles
+        for (let i = 0; i < projectileData.length; i++) {
+            const data = projectileData[i];
+            
+            if (i < this.projectiles.length) {
+                // Update existing projectile
+                const proj = this.projectiles[i];
+                this.matter.body.setPosition(proj.body, { x: data.x, y: data.y });
+                this.matter.body.setVelocity(proj.body, { x: data.vx, y: data.vy });
+                proj.age = data.age;
+            } else {
+                // Create new projectile
+                const angle = Math.atan2(data.vy, data.vx);
+                const config = {
+                    damage: 10,
+                    speed: Math.sqrt(data.vx * data.vx + data.vy * data.vy),
+                    lifetime: 120,
+                    color: data.color,
+                    owner: data.owner
+                };
+                const projectile = new Projectile(this, data.x, data.y, angle, config);
+                projectile.age = data.age;
+                this.projectiles.push(projectile);
+            }
+        }
     }
     
     /**

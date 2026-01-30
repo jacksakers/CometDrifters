@@ -15,22 +15,28 @@ export default class CometManager {
     
     /**
      * Spawn a new comet from all directions
-     * Comets pass through the camera view
+     * Comets pass through the play area
+     * Uses world coordinates (host's ship position) for consistent multiplayer spawning
      */
     spawnComet() {
-        // Get camera center position
-        const camX = this.scene.cameras.main.scrollX + this.scene.cameras.main.width / 2;
-        const camY = this.scene.cameras.main.scrollY + this.scene.cameras.main.height / 2;
+        // Get world center position (use host's ship position if available, otherwise origin)
+        let centerX = 0;
+        let centerY = 0;
         
-        // Spawn distance from camera (far enough to not pop in)
+        if (this.scene.ship && this.scene.ship.alive) {
+            centerX = this.scene.ship.body.position.x;
+            centerY = this.scene.ship.body.position.y;
+        }
+        
+        // Spawn distance from center (far enough to not pop in)
         const spawnDistance = 1500;
         
-        // Random angle around camera (all directions)
+        // Random angle around center (all directions)
         const angle = Math.random() * Math.PI * 2;
         
-        // Spawn position at distance from camera
-        const x = camX + Math.cos(angle) * spawnDistance;
-        const y = camY + Math.sin(angle) * spawnDistance;
+        // Spawn position at distance from center in world coordinates
+        const x = centerX + Math.cos(angle) * spawnDistance;
+        const y = centerY + Math.sin(angle) * spawnDistance;
         
         // Determine if this should be a planet (large comet)
         const isPlanet = Math.random() < C.PLANET_SPAWN_CHANCE;
@@ -51,10 +57,10 @@ export default class CometManager {
             depth = C.DEPTH_FAR;
         }
         
-        // Velocity: aim toward camera center with slight variation
-        const angleToCamera = Math.atan2(camY - y, camX - x);
+        // Velocity: aim toward center with slight variation
+        const angleToCenter = Math.atan2(centerY - y, centerX - x);
         const randomness = (Math.random() - 0.5) * 0.6; // +/- 0.3 radians variation
-        const velocityAngle = angleToCamera + randomness;
+        const velocityAngle = angleToCenter + randomness;
         
         // Planets move slower than regular comets
         const speed = isPlanet ?
@@ -178,15 +184,20 @@ export default class CometManager {
                 comet.applyGravity(ship);
             }
             
-            // Remove comets that are very far from camera
-            const camX = this.scene.cameras.main.scrollX + this.scene.cameras.main.width / 2;
-            const camY = this.scene.cameras.main.scrollY + this.scene.cameras.main.height / 2;
-            const dx = comet.body.position.x - camX;
-            const dy = comet.body.position.y - camY;
-            const distanceFromCamera = Math.sqrt(dx * dx + dy * dy);
+            // Remove comets that are very far from world center (host's ship)
+            let centerX = 0;
+            let centerY = 0;
+            if (ship && ship.alive) {
+                centerX = ship.body.position.x;
+                centerY = ship.body.position.y;
+            }
             
-            // Only remove when VERY far (3000 pixels from camera)
-            if (distanceFromCamera > 3000) {
+            const dx = comet.body.position.x - centerX;
+            const dy = comet.body.position.y - centerY;
+            const distanceFromCenter = Math.sqrt(dx * dx + dy * dy);
+            
+            // Only remove when VERY far (3000 pixels from center)
+            if (distanceFromCenter > 3000) {
                 // No points awarded for dodging - points come from docking now
                 comet.destroy();
                 this.comets.splice(i, 1);
@@ -227,5 +238,53 @@ export default class CometManager {
      */
     destroy() {
         this.reset();
+    }
+    
+    /**
+     * Serialize comets for network sync
+     */
+    serializeComets() {
+        return this.comets.map((comet, index) => ({
+            id: index,
+            x: comet.body.position.x,
+            y: comet.body.position.y,
+            vx: comet.body.velocity.x,
+            vy: comet.body.velocity.y,
+            radius: comet.radius,
+            depth: comet.depth
+        }));
+    }
+    
+    /**
+     * Sync comets from network data (clients only)
+     */
+    syncFromNetwork(cometData) {
+        // Remove comets that no longer exist
+        for (let i = this.comets.length - 1; i >= 0; i--) {
+            if (i >= cometData.length) {
+                this.comets[i].destroy();
+                this.comets.splice(i, 1);
+            }
+        }
+        
+        // Update or create comets
+        for (let i = 0; i < cometData.length; i++) {
+            const data = cometData[i];
+            
+            if (i < this.comets.length) {
+                // Update existing comet
+                const comet = this.comets[i];
+                this.scene.matter.body.setPosition(comet.body, { x: data.x, y: data.y });
+                this.scene.matter.body.setVelocity(comet.body, { x: data.vx, y: data.vy });
+                
+                // Also sync gravity sensor
+                this.scene.matter.body.setPosition(comet.gravitySensor, { x: data.x, y: data.y });
+            } else {
+                // Create new comet
+                const velocity = { x: data.vx, y: data.vy };
+                const comet = new Comet(this.scene, data.x, data.y, data.radius, velocity, data.depth);
+                this.comets.push(comet);
+            }
+        }
     }
 }
