@@ -368,29 +368,12 @@ export default class GameScene extends Phaser.Scene {
         // Host spawns new comets/aliens, but all clients update and draw them
         const { isHost } = window.Playroom;
         
-        // Update comets on all clients (they'll be synced from host)
-        // But only host does the spawning logic
-        if (isHost()) {
-            this.cometManager.update(this.ship);
-        } else {
-            // Clients just update positions and draw (update calls draw internally)
-            const comets = this.cometManager.getComets();
-            for (let comet of comets) {
-                comet.update();
-            }
-        }
+        // Update comets - each player spawns their own in distributed mode
+        this.cometManager.update(this.ship);
         
-        // Update aliens on all clients
-        if (isHost()) {
-            if (this.ship && this.ship.alive) {
-                this.alienManager.update(this.ship, this.cometManager.getComets());
-            }
-        } else {
-            // Clients just update and draw (update calls draw internally)
-            const aliens = this.alienManager.getAliens();
-            for (let alien of aliens) {
-                alien.update(this.ship, this.cometManager.getComets());
-            }
+        // Update aliens - each player spawns their own
+        if (this.ship && this.ship.alive) {
+            this.alienManager.update(this.ship, this.cometManager.getComets());
         }
         
         // Update projectiles (all clients - update calls draw internally)

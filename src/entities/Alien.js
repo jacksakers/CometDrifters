@@ -527,10 +527,39 @@ export default class Alien {
                            isLocallyOwned;
         
         if (shouldRunAI) {
+            // Find nearest player to target
+            let targetPlayer = player;
+            
+            if (this.scene.multiplayerManager && this.scene.multiplayerManager.isMultiplayerActive()) {
+                const allShips = this.scene.multiplayerManager.getAllShips();
+                if (allShips.length > 0) {
+                    // Find nearest alive player
+                    let nearestPlayer = null;
+                    let minDistance = Infinity;
+                    
+                    for (const ship of allShips) {
+                        if (ship.alive) {
+                            const dx = ship.body.position.x - this.body.position.x;
+                            const dy = ship.body.position.y - this.body.position.y;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            
+                            if (distance < minDistance) {
+                                minDistance = distance;
+                                nearestPlayer = ship;
+                            }
+                        }
+                    }
+                    
+                    if (nearestPlayer) {
+                        targetPlayer = nearestPlayer;
+                    }
+                }
+            }
+            
             if (this.isDocked) {
                 this.updateDocking();
             } else {
-                this.updateAI(player, comets);
+                this.updateAI(targetPlayer, comets);
             }
         }
         
