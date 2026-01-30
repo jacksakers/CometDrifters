@@ -3,7 +3,7 @@ import UIScene from './scenes/UIScene.js';
 import * as C from './config/constants.js';
 
 /**
- * Main entry point for Comet Drifters
+ * Main entry point for Comet Chasers
  * Initializes Phaser with Matter.js physics
  */
 

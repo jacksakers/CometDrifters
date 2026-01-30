@@ -1,7 +1,7 @@
 This is a solid concept. It combines the "Lunar Lander" tension (don't crash) with "Asteroids" combat, plus a King of the Hill mechanic (holding a comet to refuel).
 The "Top-Left" directional rain is a great design choice—it creates a constant "flow" to the map that prevents players from camping in one spot forever.
 Here is a streamlined Game Design Document (GDD) tailored for the Phaser + Playroom Kit stack.
-Game Design Document: "Comet Drifters" (Working Title)
+Game Design Document: "Comet Chasers" (Working Title)
 1. High Concept
 A physics-based, zero-gravity survival shooter where players pilot fragile ships through a diagonal rain of comets. Players must manage momentum and fuel, utilizing the gravitational pull of passing comets to dock, refuel, and engage in combat.
 Core Loop: Drift $\to$ Stabilize & Dock $\to$ Refuel/Reload $\to$ Dogfight $\to$ Survive.

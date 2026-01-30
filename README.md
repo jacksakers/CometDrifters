@@ -1,4 +1,4 @@
-# Comet Drifters - Development Guide
+# Comet Chasers - Development Guide
 
 ## Project Structure
 

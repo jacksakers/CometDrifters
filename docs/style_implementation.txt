@@ -1,6 +1,6 @@
 Below is the Coding Style Guide and Implementation Plan to keep your development modular and readable. Following that, I have generated a single self-contained HTML file that implements "Phase 1" of your plan: The Physics, The Rain, and The Ship, using Phaser 3 and Matter.js.
 
-Coding Style Guide: "Comet Drifters"
+Coding Style Guide: "Comet Chasers"
 To ensure the code remains readable and scalable as you move toward multiplayer, we will use ES6 Modules and a Component-Entity-Systems approach.
 
 1. Directory Structure (Local Development) Even though the preview below is one file, your local project should look like this:

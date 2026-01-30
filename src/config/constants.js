@@ -1,4 +1,4 @@
-// Game Constants for Comet Drifters
+// Game Constants for Comet Chasers
 
 // Display Settings
 export const GAME_WIDTH = 1200;

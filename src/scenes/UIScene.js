@@ -39,7 +39,7 @@ export default class UIScene extends Phaser.Scene {
         this.titleText = this.add.text(
             C.UI_PADDING, 
             C.UI_PADDING, 
-            'COMET DRIFTERS', 
+            'COMET CHASERS', 
             {
                 fontFamily: C.UI_FONT_FAMILY,
                 fontSize: '24px',
