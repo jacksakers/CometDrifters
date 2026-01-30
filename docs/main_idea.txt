@@ -1,0 +1,95 @@
+This is a solid concept. It combines the "Lunar Lander" tension (don't crash) with "Asteroids" combat, plus a King of the Hill mechanic (holding a comet to refuel).
+The "Top-Left" directional rain is a great design choice—it creates a constant "flow" to the map that prevents players from camping in one spot forever.
+Here is a streamlined Game Design Document (GDD) tailored for the Phaser + Playroom Kit stack.
+Game Design Document: "Comet Drifters" (Working Title)
+1. High Concept
+A physics-based, zero-gravity survival shooter where players pilot fragile ships through a diagonal rain of comets. Players must manage momentum and fuel, utilizing the gravitational pull of passing comets to dock, refuel, and engage in combat.
+Core Loop: Drift $\to$ Stabilize & Dock $\to$ Refuel/Reload $\to$ Dogfight $\to$ Survive.
+2. Technical Stack
+Engine: Phaser 3 (using Matter.js physics engine, which is built-in).
+Why Matter.js? Arcade physics is box-based. Matter.js supports circular bodies (comets) and complex gravity/attractors much better out of the box.
+Multiplayer/Input: Playroom Kit.
+Role: Handles lobby, state sync, and converts smartphones into gamepads.
+3. Core Mechanics
+A. Movement (The "Feel")
+Zero-G Inertia: The ship does not stop when you release the button. You drift forever until you apply counter-thrust or hit something.
+Thrust: Short bursts of acceleration. Consumes Fuel.
+Rotation: Snappy rotation (not physics-based) to make aiming easier for non-gamers.
+Screen Wrap: No. If you drift off-screen, you die/explode (or bounce off the edges, depending on map tightness).
+B. The Environment (The Comets)
+Spawn: Comets spawn top-left (off-screen) and drift toward bottom-right.
+Attributes:
+Size: Small (hard to land, low gravity), Medium, Large (easy land, high gravity).
+Gravity Wells: Each comet has a small invisible circle around it. If a player enters, they are gently pulled toward the center.
+Rotation: Comets spin slowly (visual only) or physically (affecting landing).
+C. Resource Management (The "Anchor")
+Fuel: Depletes when moving.
+Ammo: Depletes when shooting.
+Docking: To refill, the player must "land" on a comet.
+Mechanic: Fly close + match speed $\to$ press "Down" or "Interact" to magnetic clamp.
+Risk: You are a sitting duck while docked, but you regain resources rapidly.
+D. Combat
+Weapons:
+Primary: Linear laser shots (requires ammo).
+Secondary (Rare): "Push" wave (blasts nearby enemies/comets away without damage).
+Health: 1-hit kill (hardcore) or Shield System (3 hits). Given the "Party Game" vibe, a 3-hit shield that regenerates upon docking is more forgiving.
+4. Game Modes (Dynamic Lobby)
+Since you are using Playroom, the game state should adapt based on the playerCount.
+State 1: Solo (The Waiting Room)
+Objective: Survival / High Score.
+Enemies: AI "Scavenger Drones" (Simple logic: fly toward player, shoot once, die easily).
+Win Condition: How long can you survive the comet rain?
+State 2: Multiplayer (2-4 Players)
+Trigger: As soon as Player 2 connects via QR code.
+Lobby Selection: A simple UI appears: "VERSUS" or "CO-OP".
+Versus (PvP):
+Last ship floating wins.
+Comets are neutral cover.
+Co-op (PvE):
+Wave survival.
+Friendly fire is ON (for chaos/hilarity).
+Revive mechanic: Survive for 15 seconds to respawn your dead teammate.
+5. Controls (The Low Barrier)
+We will use Playroom's virtual gamepad capabilities.
+Smartphone Layout:
+Left Side (Virtual D-Pad or Joystick): rotate ship left/right.
+Right Side (Big Button A): THRUST (Gas).
+Right Side (Small Button B): SHOOT.
+Double Tap A: Boost (uses extra fuel).
+Keyboard (Desktop Fallback):
+Arrow Keys: Rotate.
+Space: Thrust.
+Z/X: Shoot.
+6. Visual Style
+Perspective: 2D Top-down.
+Art:
+Background: Parallax starfield (slow movement to sell the "drift").
+Sprites: Simple vector shapes or neon-outlined sprites (Geometry Wars style). This is easier for a programmer to make look good than detailed pixel art.
+UI (HUD):
+Fuel Gauge: A curved bar next to the ship.
+Ammo: Dots around the ship.
+Design Note: Keep UI near the player object so they don't have to look at the corner of the screen.
+7. Technical Implementation Plan (Phaser + Playroom)
+Phase 1: The Physics Playground (Solo)
+Initialize Phaser with physics: { default: 'matter' }.
+Create the Ship class.
+Implement "thrust" forces.
+Create CometManager class: Spawns circles top-left, applies velocity bottom-right, destroys them when they go off-screen.
+Add collision detection: Ship vs Comet.
+Phase 2: The Network (Playroom)
+Import Playroom.
+Change input listener: Instead of keyboard.on, use Playroom.onPlayerJoin(player => ...)
+Map Playroom joystick data to Ship rotation/thrust.
+Sync state: The "Host" (Player 1's browser) calculates physics. Send x,y,rotation to other players.
+Phase 3: The Game Loop
+Add Fuel logic.
+Add Shooting.
+Add "Docking" logic (if touching comet body + low velocity = refill).
+8. Potential Challenges & Solutions
+Challenge: Lag in multiplayer physics.
+Solution: Since it's a browser party game (Playroom), assume players are likely in the same room or on decent wifi. Use Client-Side Prediction for the local player's ship so it feels crisp, and interpolate the enemy ships.
+Challenge: The "Rain" makes it hard to move up-left.
+Solution: Give the player a "Boost" mechanic that burns 20% fuel for a massive burst of speed to fight the current.
+Next Steps for You:
+Since you are ready to code, I can generate the Project Structure and the index.html file that includes Phaser and Playroom, setting up the basic "Ship floating in space" scene.
+Would you like the HTML/JS Boilerplate to get this running?

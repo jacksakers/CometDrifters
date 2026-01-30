@@ -1,0 +1,92 @@
+Below is the Coding Style Guide and Implementation Plan to keep your development modular and readable. Following that, I have generated a single self-contained HTML file that implements "Phase 1" of your plan: The Physics, The Rain, and The Ship, using Phaser 3 and Matter.js.
+
+Coding Style Guide: "Comet Drifters"
+To ensure the code remains readable and scalable as you move toward multiplayer, we will use ES6 Modules and a Component-Entity-Systems approach.
+
+1. Directory Structure (Local Development) Even though the preview below is one file, your local project should look like this:
+
+Plaintext
+/src
+  /config
+    - constants.js      (Gravity settings, fuel costs, colors)
+  /entities
+    - Ship.js           (Player logic, input handling)
+    - Comet.js          (Physics body, gravity well logic)
+    - Projectile.js
+  /managers
+    - CometManager.js   (Spawning logic, object pooling)
+    - InputManager.js   (Abstracts Keyboard/Touch/Playroom into generic actions)
+  /scenes
+    - GameScene.js      (Main loop)
+    - UIScene.js        (Overlay for fuel/ammo)
+  main.js               (Entry point)
+index.html
+2. Syntax Standards
+
+Classes: Use PascalCase (e.g., CometManager).
+
+Variables: Use camelCase (e.g., fuelLevel).
+
+Constants: Use UPPER_SNAKE_CASE (e.g., MAX_VELOCITY).
+
+No Magic Numbers: Don't write x + 50 in the middle of code. Define const SPAWN_OFFSET = 50 at the top of the file or in constants.js.
+
+3. Modularity Rule
+
+Single Responsibility: The Ship class should not handle scoring. The Comet class should not handle spawning itself.
+
+Input Agnosticism: The Ship should not listen for "Key A". It should listen for "RotateLeft". This allows you to swap Keyboard for Touch or Playroom Phone controls without rewriting the Ship logic.
+
+Implementation Plan
+Phase 1: The Physics Playground (Current Step)
+
+Goal: Nail the "drift."
+
+Tech: Phaser 3 + Matter.js.
+
+Tasks:
+
+Set up Matter.js world with 0 global gravity.
+
+Implement Ship thrust (force application) and "snappy" rotation.
+
+Generate "The Rain" (Comets spawning Top-Left, moving Bottom-Right).
+
+Deliverable: A ship flying through a stream of rocks.
+
+Phase 2: The Anchor (Docking)
+
+Goal: Implement the risk/reward loop.
+
+Tasks:
+
+Add Fuel decay on thrust.
+
+Add "Gravity Wells" to comets (sensors).
+
+Implement "Hard Dock" (pressing down while matching speed).
+
+Deliverable: You die if you don't catch a ride on a comet.
+
+Phase 3: The Network (Playroom Kit)
+
+Goal: Multiplayer synchronization.
+
+Tasks:
+
+Swap InputManager to read from Playroom state.
+
+Sync Ship X/Y/Rotation to other clients.
+
+Deliverable: Two browser windows flying together.
+
+Phase 1 & 2 Prototype
+Here is the functional prototype. I have synthesized the modular structure into a single file for the preview, but I have used Classes clearly to show how you should split them apart later.
+
+Controls:
+
+W / Up Arrow: Thrust (Consumes Fuel).
+
+A / D / Left / Right: Rotate Ship.
+
+S / Down: Brake / Dock (Hold this when near a Green Comet to refuel).
