@@ -395,6 +395,19 @@ export default class UIScene extends Phaser.Scene {
                 fontStyle: 'bold'
             }
         ).setOrigin(0.5);
+
+        // add text saying "Press ESC to restart" below the button
+        const escHint = this.add.text(
+            centerX, 
+            centerY + 130,
+            'Press ESC to Restart',
+            {
+                fontFamily: C.UI_FONT_FAMILY,
+                fontSize: '12px',
+                color: '#ffffff',
+                alpha: 0.6
+            }
+        ).setOrigin(0.5);
         
         // Button interactions
         button.on('pointerover', () => {
@@ -417,7 +430,8 @@ export default class UIScene extends Phaser.Scene {
             this.gameOverReason,
             this.gameOverScore, 
             button, 
-            buttonText
+            buttonText,
+            escHint
         ]);
         
         // Hide initially

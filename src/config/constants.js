@@ -66,7 +66,7 @@ export const GRAVITY_MIN_DISTANCE = 10; // Minimum distance for gravity calc
 
 // Docking Settings
 export const DOCK_MAX_VELOCITY = 5; // Max relative velocity to successfully dock
-export const DOCK_DISTANCE = 80; // Distance to comet center to dock
+export const DOCK_DISTANCE = 30; // Distance to comet center to dock
 export const AUTO_DOCK_VELOCITY = 2; // Auto-dock when moving this slow near comet
 
 // UI Settings
