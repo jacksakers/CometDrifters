@@ -350,14 +350,24 @@ export default class Alien {
     attemptDock(comet) {
         if (this.isDocked || !this.alive) return;
         
-        const dist = this.getDistanceToComet(comet);
+        const dx = comet.body.position.x - this.body.position.x;
+        const dy = comet.body.position.y - this.body.position.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
         
         // Check if close enough and moving slow enough relative to comet
         const relVelX = this.body.velocity.x - comet.body.velocity.x;
         const relVelY = this.body.velocity.y - comet.body.velocity.y;
         const relSpeed = Math.sqrt(relVelX * relVelX + relVelY * relVelY);
         
-        if (dist < C.DOCK_DISTANCE && relSpeed < C.DOCK_MAX_VELOCITY) {
+        // Use same logic as ship: account for comet radius
+        const inDockRange = distance < C.DOCK_DISTANCE + comet.radius;
+        
+        if (inDockRange) {
+            // Rotate alien to face away from comet center before docking
+            const angleToComet = Math.atan2(dy, dx);
+            const landingAngle = angleToComet + Math.PI; // Face outward
+            this.scene.matter.body.setAngle(this.body, landingAngle);
+            
             this.dock(comet);
         }
     }
@@ -395,6 +405,7 @@ export default class Alien {
         
         // Heal while docked
         this.healTimer = 0;
+        this.stateTimer = 0; // Reset timer to track docking duration
     }
     
     /**
@@ -412,7 +423,8 @@ export default class Alien {
         
         this.isDocked = false;
         this.dockedComet = null;
-        this.aiState = 'patrol';
+        this.aiState = 'attack'; // Return to attacking player after healing
+        this.stateTimer = 0; // Reset timer for new state
     }
     
     /**
@@ -421,6 +433,9 @@ export default class Alien {
     updateDocking() {
         if (!this.isDocked || !this.dockedComet) return;
         
+        // Track time docked
+        this.stateTimer++;
+        
         // Heal slowly while docked
         this.healTimer = (this.healTimer || 0) + 1;
         if (this.healTimer >= C.ALIEN_HEAL_INTERVAL) {
@@ -428,7 +443,7 @@ export default class Alien {
             this.healTimer = 0;
         }
         
-        // Undock after some time or if fully healed
+        // Undock after healing to 80% or after 5 seconds docked
         if (this.health >= this.maxHealth * 0.8 || this.stateTimer > 300) {
             this.undock();
             return;
