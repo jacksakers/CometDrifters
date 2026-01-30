@@ -487,10 +487,14 @@ export default class Alien {
     update(player, comets) {
         if (!this.alive) return;
         
-        if (this.isDocked) {
-            this.updateDocking();
-        } else {
-            this.updateAI(player, comets);
+        // Only host runs AI logic, clients just render
+        const { isHost } = window.Playroom;
+        if (isHost()) {
+            if (this.isDocked) {
+                this.updateDocking();
+            } else {
+                this.updateAI(player, comets);
+            }
         }
         
         this.draw();

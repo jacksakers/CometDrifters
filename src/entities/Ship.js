@@ -562,10 +562,12 @@ export default class Ship {
             this.damageFlashTimer--;
         }
         
-        // Invulnerability flicker
-        const isFlickering = this.invulnerableTimer > 0 && this.invulnerableTimer % 6 < 3;
-        if (isFlickering) {
-            return; // Skip drawing to create flicker effect
+        // Invulnerability flicker (only for local player)
+        if (this.isLocal) {
+            const isFlickering = this.invulnerableTimer > 0 && this.invulnerableTimer % 6 < 3;
+            if (isFlickering) {
+                return; // Skip drawing to create flicker effect
+            }
         }
         
         this.graphics.translateCanvas(x, y);

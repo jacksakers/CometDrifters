@@ -321,15 +321,29 @@ export default class GameScene extends Phaser.Scene {
             }
         }
         
-        // Only host spawns comets and aliens
+        // Host spawns new comets/aliens, but all clients update and draw them
         const { isHost } = window.Playroom;
+        
+        // Update comets on all clients (they'll be synced from host)
+        // But only host does the spawning logic
         if (isHost()) {
-            // Update comet manager
             this.cometManager.update(this.ship);
-            
-            // Update alien manager
+        } else {
+            // Clients just update positions and draw
+            for (let comet of this.cometManager.getComets()) {
+                comet.update();
+            }
+        }
+        
+        // Update aliens on all clients
+        if (isHost()) {
             if (this.ship && this.ship.alive) {
                 this.alienManager.update(this.ship, this.cometManager.getComets());
+            }
+        } else {
+            // Clients just update and draw
+            for (let alien of this.alienManager.getAliens()) {
+                alien.update(this.ship, this.cometManager.getComets());
             }
         }
         
