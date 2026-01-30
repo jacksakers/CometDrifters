@@ -582,6 +582,30 @@ export default class Ship {
         }
         
         this.graphics.restore();
+        
+        // Draw crosshair in front of ship (after restore so it's in world space)
+        const crosshairDistance = C.SHIP_SIZE * 4; // Distance ahead of ship
+        const crosshairX = x + Math.cos(angle) * crosshairDistance;
+        const crosshairY = y + Math.sin(angle) * crosshairDistance;
+        const crosshairSize = 8;
+        
+        // Draw crosshair lines
+        this.graphics.lineStyle(2, 0x00ffff, 0.6);
+        
+        // Horizontal line
+        this.graphics.lineBetween(
+            crosshairX - crosshairSize, crosshairY,
+            crosshairX + crosshairSize, crosshairY
+        );
+        
+        // Vertical line
+        this.graphics.lineBetween(
+            crosshairX, crosshairY - crosshairSize,
+            crosshairX, crosshairY + crosshairSize
+        );
+        
+        // Optional: Draw a small circle in the center
+        this.graphics.strokeCircle(crosshairX, crosshairY, crosshairSize * 0.5);
     }
     
     /**
