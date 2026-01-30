@@ -609,6 +609,11 @@ export default class Alien {
         
         this.alive = false;
         
+        // Broadcast alien kill to other players in multiplayer
+        if (this.scene.multiplayerManager && this.scene.multiplayerManager.isMultiplayerActive()) {
+            this.scene.multiplayerManager.broadcastAlienKill(this.id);
+        }
+        
         // Create explosion
         this.createExplosion();
         

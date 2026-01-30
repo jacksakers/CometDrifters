@@ -179,6 +179,7 @@ export default class AlienManager {
             vy: alien.body.velocity.y,
             rotation: alien.body.angle,
             health: alien.health,
+            alive: alien.health > 0,
             isDocked: alien.isDocked,
             aiState: alien.aiState
         }));
@@ -188,6 +189,11 @@ export default class AlienManager {
      * Create an alien from network data (when remote player spawns one)
      */
     createAlienFromNetwork(data) {
+        // Don't create aliens that are already dead
+        if (data.health <= 0) {
+            return null;
+        }
+        
         // Check if alien already exists
         const existingAlien = this.aliens.find(a => a.id === data.id);
         if (existingAlien) return;
@@ -249,6 +255,11 @@ export default class AlienManager {
                 newAliens.push(alien);
                 existingAliens.delete(data.id);
             } else {
+                // Don't create aliens that are already dead
+                if (data.health <= 0) {
+                    continue;
+                }
+                
                 // Create new alien
                 const alien = new Alien(this.scene, data.x, data.y);
                 alien.id = data.id; // Use network ID

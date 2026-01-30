@@ -16,6 +16,9 @@ export default class MultiplayerManager {
         this.isInitialized = false;
         this.updateInterval = null;
         
+        // Track processed alien kills to prevent duplicate processing
+        this.processedAlienKills = new Set();
+        
         // Random name generation
         this.nameAdjectives = [
             'Swift', 'Brave', 'Clever', 'Daring', 'Bold', 'Quick', 
@@ -346,6 +349,34 @@ export default class MultiplayerManager {
     }
     
     /**
+     * Broadcast alien kill to all players
+     * This ensures that when one peer kills an alien, it's removed from all peers
+     */
+    broadcastAlienKill(alienId) {
+        if (!this.isMultiplayerActive()) return;
+        
+        const me = myPlayer();
+        if (!me) return;
+        
+        // Get current killed aliens list
+        const killedAliens = me.getState('killedAliens') || [];
+        
+        // Add this alien to the killed list with timestamp
+        const killData = {
+            alienId: alienId,
+            timestamp: Date.now()
+        };
+        
+        // Add to list and limit to last 100 kills to prevent unbounded growth
+        const updatedKills = [...killedAliens, killData].slice(-100);
+        
+        // Broadcast reliably to all peers
+        me.setState('killedAliens', updatedKills, true);
+        
+        console.log('[Multiplayer] Broadcasting alien kill:', alienId);
+    }
+    
+    /**
      * Update player state in network
      */
     updatePlayerState(ship, playerState) {
@@ -474,6 +505,25 @@ export default class MultiplayerManager {
                     }
                 }
             }
+            
+            // Listen for alien kill events from this remote player
+            const killedAliens = playerState.getState('killedAliens');
+            if (killedAliens && Array.isArray(killedAliens)) {
+                for (const killData of killedAliens) {
+                    const killKey = `${killData.alienId}_${killData.timestamp}`;
+                    if (!this.processedAlienKills.has(killKey)) {
+                        // Remove this alien from our local game
+                        this.handleAlienKillFromNetwork(killData.alienId);
+                        this.processedAlienKills.add(killKey);
+                        
+                        // Clean up old processed kills (keep last 100)
+                        if (this.processedAlienKills.size > 100) {
+                            const killsArray = Array.from(this.processedAlienKills);
+                            this.processedAlienKills = new Set(killsArray.slice(-100));
+                        }
+                    }
+                }
+            }
         }
     }
     
@@ -546,8 +596,18 @@ export default class MultiplayerManager {
                 alien.isDocked = data.isDocked;
                 alien.aiState = data.aiState;
                 
+                // If alien health is 0 or negative, destroy it
+                if (data.health <= 0 && alien.alive) {
+                    alien.destroy();
+                }
+                
                 existingAliens.delete(data.id);
             } else {
+                // Don't create aliens that are already dead
+                if (data.health <= 0) {
+                    continue;
+                }
+                
                 // Create new alien from remote player
                 this.scene.alienManager.createAlienFromNetwork(data);
             }
@@ -574,6 +634,44 @@ export default class MultiplayerManager {
         );
         
         this.scene.projectiles.push(projectile);
+    }
+    
+    /**
+     * Handle alien kill event from network
+     * Remove the alien from our local game when another peer kills it
+     */
+    handleAlienKillFromNetwork(alienId) {
+        const alienManager = this.scene.alienManager;
+        if (!alienManager) return;
+        
+        // Find the alien with this ID
+        const alienIndex = alienManager.aliens.findIndex(a => a.id === alienId);
+        
+        if (alienIndex !== -1) {
+            const alien = alienManager.aliens[alienIndex];
+            console.log('[Multiplayer] Removing alien killed by remote peer:', alienId);
+            
+            // Destroy the alien (without broadcasting again to avoid loops)
+            // We need to avoid calling alien.destroy() which would re-broadcast
+            // So we manually clean it up
+            alien.alive = false;
+            
+            // Create explosion for visual feedback
+            alien.createExplosion();
+            
+            // Remove body
+            if (alien.body && this.scene.matter.world) {
+                this.scene.matter.world.remove(alien.body);
+            }
+            
+            // Remove graphics
+            if (alien.graphics) {
+                alien.graphics.destroy();
+            }
+            
+            // Remove from manager's array
+            alienManager.aliens.splice(alienIndex, 1);
+        }
     }
     
     /**
