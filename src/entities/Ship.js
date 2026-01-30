@@ -119,9 +119,10 @@ export default class Ship {
     
     /**
      * Attempt to dock with a nearby comet
+     * Auto-rotates ship to face outward from comet surface
      */
     attemptDock(inputState, comets) {
-        if (!this.alive || this.isDocked || !inputState.dock) return;
+        if (!this.alive || this.isDocked) return;
         
         // Check if close enough to any comet and moving slow enough
         for (let comet of comets) {
@@ -134,7 +135,18 @@ export default class Ship {
             const relVelY = this.body.velocity.y - comet.body.velocity.y;
             const relSpeed = Math.sqrt(relVelX * relVelX + relVelY * relVelY);
             
-            if (distance < C.DOCK_DISTANCE && relSpeed < C.DOCK_MAX_VELOCITY) {
+            // Calculate if in docking range
+            const inDockRange = distance < C.DOCK_DISTANCE + comet.radius;
+            const slowEnough = relSpeed < C.DOCK_MAX_VELOCITY;
+            const verySlowForAutoDock = relSpeed < C.AUTO_DOCK_VELOCITY;
+            
+            // Auto-dock if very slow and close, or manual dock with button
+            if (inDockRange && slowEnough && (inputState.dock || verySlowForAutoDock)) {
+                // Rotate ship to face away from comet center (outward landing)
+                const angleToComet = Math.atan2(dy, dx);
+                const landingAngle = angleToComet + Math.PI; // Face outward
+                this.scene.matter.body.setAngle(this.body, landingAngle);
+                
                 this.dock(comet);
                 return;
             }
@@ -143,6 +155,7 @@ export default class Ship {
     
     /**
      * Dock to a comet (lock position relative to comet)
+     * Maintains orientation facing away from comet
      */
     dock(comet) {
         this.isDocked = true;
@@ -154,9 +167,19 @@ export default class Ship {
             y: comet.body.velocity.y
         });
         
-        // Store offset from comet center
+        // Store offset from comet center and angle
         this.dockOffsetX = this.body.position.x - comet.body.position.x;
         this.dockOffsetY = this.body.position.y - comet.body.position.y;
+        this.dockAngleOffset = this.body.angle - Math.atan2(this.dockOffsetY, this.dockOffsetX);
+        
+        // Rotate ship to face outward from comet center
+        const angleToCenter = Math.atan2(
+            comet.body.position.y - this.body.position.y,
+            comet.body.position.x - this.body.position.x
+        );
+        // Face opposite direction (outward)
+        const outwardAngle = angleToCenter + Math.PI;
+        this.scene.matter.body.setAngle(this.body, outwardAngle);
     }
     
     /**
@@ -177,7 +200,7 @@ export default class Ship {
     }
     
     /**
-     * Maintain docked position
+     * Maintain docked position and orientation
      */
     updateDocking() {
         if (this.isDocked && this.dockedComet) {
@@ -187,6 +210,11 @@ export default class Ship {
             
             this.scene.matter.body.setPosition(this.body, { x: targetX, y: targetY });
             this.scene.matter.body.setVelocity(this.body, this.dockedComet.body.velocity);
+            
+            // Maintain orientation facing outward from comet center
+            // dockOffsetX/Y is already the vector from comet to ship (outward)
+            const angleToCenter = Math.atan2(this.dockOffsetY, this.dockOffsetX);
+            this.scene.matter.body.setAngle(this.body, angleToCenter);
             
             // Refuel while docked
             this.fuel = Math.min(C.SHIP_MAX_FUEL, this.fuel + C.SHIP_FUEL_REGEN_RATE);
@@ -304,7 +332,7 @@ export default class Ship {
      */
     createExplosion() {
         // Create explosion particles (Phaser 3.60+ API)
-        this.scene.add.particles(this.body.position.x, this.body.position.y, 'particle', {
+        const emitter = this.scene.add.particles(this.body.position.x, this.body.position.y, 'particle', {
             speed: { min: 100, max: 300 },
             angle: { min: 0, max: 360 },
             scale: { start: 1, end: 0 },
@@ -312,6 +340,11 @@ export default class Ship {
             lifespan: 600,
             tint: [0xff4d4d, 0xf9cb28, 0x3b82f6],
             quantity: C.EXPLOSION_PARTICLE_COUNT
+        });
+        
+        // Destroy emitter after particles die
+        this.scene.time.delayedCall(650, () => {
+            emitter.destroy();
         });
     }
     

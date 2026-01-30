@@ -28,25 +28,27 @@ export const SHIP_STROKE_COLOR = 0x1e40af;
 
 // Comet Settings
 export const COMET_SPAWN_OFFSET = -100; // Off-screen spawn
-export const COMET_MIN_SIZE = 30;
-export const COMET_MAX_SIZE = 80;
+export const COMET_MIN_SIZE = 50; // Increased from 30
+export const COMET_MAX_SIZE = 120; // Increased from 80
 export const COMET_MIN_VELOCITY_X = 1;
 export const COMET_MAX_VELOCITY_X = 3;
 export const COMET_MIN_VELOCITY_Y = 1.5;
 export const COMET_MAX_VELOCITY_Y = 3.5;
-export const COMET_BASE_SPAWN_RATE = 0.08; // Probability per frame (increased from 0.02)
-export const COMET_SPAWN_INCREASE_RATE = 0.00001; // Increase per score point
+export const COMET_BASE_SPAWN_RATE = 0.02; // Probability per frame - reduced for better spacing
+export const COMET_SPAWN_INCREASE_RATE = 0.00005; // Increase per score point
 export const COMET_COLOR = 0x94a3b8;
 export const COMET_STROKE_COLOR = 0x64748b;
+export const COMET_REMOVAL_BUFFER = 400; // Distance off-screen before removal
 
 // Gravity Well Settings
 export const GRAVITY_WELL_MULTIPLIER = 2.5; // Radius multiplier from comet size
-export const GRAVITY_STRENGTH = 0.00008; // Force strength per distance unit
+export const GRAVITY_STRENGTH = 0.0003; // Force strength per distance unit (increased from 0.00008)
 export const GRAVITY_MIN_DISTANCE = 10; // Minimum distance for gravity calc
 
 // Docking Settings
-export const DOCK_MAX_VELOCITY = 3; // Max velocity to successfully dock
-export const DOCK_DISTANCE = 50; // Distance to comet center to dock
+export const DOCK_MAX_VELOCITY = 5; // Max relative velocity to successfully dock
+export const DOCK_DISTANCE = 80; // Distance to comet center to dock
+export const AUTO_DOCK_VELOCITY = 2; // Auto-dock when moving this slow near comet
 
 // UI Settings
 export const UI_FONT_FAMILY = 'Segoe UI, Arial, sans-serif';

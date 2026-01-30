@@ -44,20 +44,14 @@ export default class GameScene extends Phaser.Scene {
         console.log('[GameScene] Ship body position:', this.ship.body.position);
         console.log('[GameScene] Camera bounds before:', this.cameras.main.getBounds());
         
-        // Setup camera bounds (expanded world)
-        this.cameras.main.setBounds(0, 0, C.GAME_WIDTH * 3, C.GAME_HEIGHT * 3);
+        // No camera bounds - infinite world
+        // Remove world bounds too - no boundaries
         
         // Center camera on ship initially
         this.cameras.main.scrollX = this.ship.body.position.x - C.GAME_WIDTH / 2;
         this.cameras.main.scrollY = this.ship.body.position.y - C.GAME_HEIGHT / 2;
         
-        console.log('[GameScene] Camera bounds after:', this.cameras.main.getBounds());
         console.log('[GameScene] Camera scroll set to:', this.cameras.main.scrollX, this.cameras.main.scrollY);
-        
-        // Expand world bounds so ship doesn't hit edges
-        this.matter.world.setBounds(0, 0, C.GAME_WIDTH * 3, C.GAME_HEIGHT * 3);
-        
-        console.log('[GameScene] World bounds set to:', C.GAME_WIDTH * 3, 'x', C.GAME_HEIGHT * 3);
         
         // Setup collision detection
         this.setupCollisions();
@@ -89,22 +83,15 @@ export default class GameScene extends Phaser.Scene {
     }
     
     /**
-     * Create parallax starfield
+     * Create parallax starfield - infinite generation
      */
     createStarfield() {
         this.stars = [];
+        this.starGrid = {}; // Track which grid cells have stars
+        this.gridSize = 400; // Size of grid cells for star generation
         
-        for (let i = 0; i < 150; i++) {
-            const star = this.add.circle(
-                Math.random() * C.GAME_WIDTH,
-                Math.random() * C.GAME_HEIGHT,
-                Math.random() * 1.5,
-                0xffffff,
-                Math.random() * 0.8 + 0.2
-            );
-            star.speed = Math.random() * 0.5 + 0.2;
-            this.stars.push(star);
-        }
+        // Generate initial stars around starting position
+        this.generateStarsAroundCamera();
     }
     
     /**
@@ -147,12 +134,9 @@ export default class GameScene extends Phaser.Scene {
      * Handle ship-comet collision
      */
     handleShipCometCollision() {
-        if (!this.ship || !this.ship.alive) return;
-        
-        // Only destroy if not docked and moving fast
-        if (!this.ship.isDocked) {
-            this.ship.destroy('Collision Detected');
-        }
+        // Comets no longer kill the player
+        // Player can land on them safely
+        return;
     }
     
     /**
@@ -214,22 +198,68 @@ export default class GameScene extends Phaser.Scene {
     }
     
     /**
+     * Generate stars around current camera position
+     */
+    generateStarsAroundCamera() {
+        const camX = this.cameras.main.scrollX + C.GAME_WIDTH / 2;
+        const camY = this.cameras.main.scrollY + C.GAME_HEIGHT / 2;
+        
+        // Determine which grid cells are visible
+        const minGridX = Math.floor((camX - C.GAME_WIDTH) / this.gridSize);
+        const maxGridX = Math.floor((camX + C.GAME_WIDTH) / this.gridSize);
+        const minGridY = Math.floor((camY - C.GAME_HEIGHT) / this.gridSize);
+        const maxGridY = Math.floor((camY + C.GAME_HEIGHT) / this.gridSize);
+        
+        // Generate stars for visible grid cells
+        for (let gx = minGridX; gx <= maxGridX; gx++) {
+            for (let gy = minGridY; gy <= maxGridY; gy++) {
+                const gridKey = `${gx},${gy}`;
+                
+                if (!this.starGrid[gridKey]) {
+                    // Generate stars for this grid cell
+                    this.starGrid[gridKey] = [];
+                    const starsInCell = 20 + Math.floor(Math.random() * 10);
+                    
+                    for (let i = 0; i < starsInCell; i++) {
+                        const star = this.add.circle(
+                            gx * this.gridSize + Math.random() * this.gridSize,
+                            gy * this.gridSize + Math.random() * this.gridSize,
+                            Math.random() * 1.5 + 0.3,
+                            0xffffff,
+                            Math.random() * 0.6 + 0.3
+                        );
+                        star.setDepth(-1); // Behind everything
+                        this.starGrid[gridKey].push(star);
+                    }
+                }
+            }
+        }
+        
+        // Clean up stars that are far from camera
+        const removeDistance = this.gridSize * 3;
+        for (const gridKey in this.starGrid) {
+            const [gx, gy] = gridKey.split(',').map(Number);
+            const gridCenterX = gx * this.gridSize + this.gridSize / 2;
+            const gridCenterY = gy * this.gridSize + this.gridSize / 2;
+            const distX = Math.abs(gridCenterX - camX);
+            const distY = Math.abs(gridCenterY - camY);
+            
+            if (distX > removeDistance || distY > removeDistance) {
+                // Destroy stars in this grid cell
+                this.starGrid[gridKey].forEach(star => star.destroy());
+                delete this.starGrid[gridKey];
+            }
+        }
+    }
+    
+    /**
      * Update starfield with parallax
      */
     updateStarfield() {
-        this.stars.forEach(star => {
-            star.y += star.speed;
-            star.x += star.speed * 0.5; // Diagonal movement
-            
-            // Wrap around
-            if (star.y > C.GAME_HEIGHT) {
-                star.y = 0;
-                star.x = Math.random() * C.GAME_WIDTH;
-            }
-            if (star.x > C.GAME_WIDTH) {
-                star.x = 0;
-            }
-        });
+        // Generate stars around camera as it moves
+        if (this.game.loop.frame % 10 === 0) {
+            this.generateStarsAroundCamera();
+        }
     }
     
     /**

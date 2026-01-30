@@ -112,20 +112,22 @@ export default class Comet {
         // Update rotation
         this.rotation += this.rotationSpeed;
         
-        // Check if off screen
+        // Check if way off screen (with large buffer)
         const pos = this.body.position;
-        const bounds = this.scene.cameras.main.getBounds();
+        const cam = this.scene.cameras.main;
+        const buffer = C.COMET_REMOVAL_BUFFER || 400; // Large buffer so comets last longer
+        const bounds = {
+            left: cam.scrollX - buffer,
+            right: cam.scrollX + cam.width + buffer,
+            top: cam.scrollY - buffer,
+            bottom: cam.scrollY + cam.height + buffer
+        };
         
         if (!this.hasLeftScreen) {
-            // Check if completely visible first
-            if (pos.x > bounds.x && pos.y > bounds.y) {
-                // Now check if it left
-                if (pos.x > bounds.right + 100 || 
-                    pos.y > bounds.bottom + 100 ||
-                    pos.x < bounds.x - 100 ||
-                    pos.y < bounds.y - 100) {
-                    this.hasLeftScreen = true;
-                }
+            // Only mark as off-screen when way outside the visible area
+            if (pos.x < bounds.left || pos.x > bounds.right ||
+                pos.y < bounds.top || pos.y > bounds.bottom) {
+                this.hasLeftScreen = true;
             }
         }
         

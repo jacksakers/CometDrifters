@@ -3,7 +3,7 @@ import * as C from '../config/constants.js';
 
 /**
  * CometManager - Handles comet spawning and lifecycle
- * Spawns comets from top-left moving to bottom-right ("The Rain")
+ * Spawns comets from all directions moving in random trajectories
  */
 export default class CometManager {
     constructor(scene) {
@@ -14,36 +14,39 @@ export default class CometManager {
     }
     
     /**
-     * Spawn a new comet from the top-left
+     * Spawn a new comet from all directions
+     * Comets pass through the camera view
      */
     spawnComet() {
-        const width = this.scene.cameras.main.width;
-        const height = this.scene.cameras.main.height;
+        // Get camera center position
+        const camX = this.scene.cameras.main.scrollX + this.scene.cameras.main.width / 2;
+        const camY = this.scene.cameras.main.scrollY + this.scene.cameras.main.height / 2;
         
-        // Spawn position: somewhere along the top-left edge
-        // Either from top edge (moving right) or left edge (moving down)
-        let x, y;
+        // Spawn distance from camera (far enough to not pop in)
+        const spawnDistance = 1500;
         
-        if (Math.random() < 0.5) {
-            // Spawn from top edge
-            x = Math.random() * width * 0.7; // Left 70% of screen
-            y = C.COMET_SPAWN_OFFSET;
-        } else {
-            // Spawn from left edge
-            x = C.COMET_SPAWN_OFFSET;
-            y = Math.random() * height * 0.7; // Top 70% of screen
-        }
+        // Random angle around camera (all directions)
+        const angle = Math.random() * Math.PI * 2;
+        
+        // Spawn position at distance from camera
+        const x = camX + Math.cos(angle) * spawnDistance;
+        const y = camY + Math.sin(angle) * spawnDistance;
         
         // Random size
         const size = C.COMET_MIN_SIZE + 
                      Math.random() * (C.COMET_MAX_SIZE - C.COMET_MIN_SIZE);
         
-        // Velocity: always moving toward bottom-right
+        // Velocity: aim toward camera center with slight variation
+        const angleToCamera = Math.atan2(camY - y, camX - x);
+        const randomness = (Math.random() - 0.5) * 0.6; // +/- 0.3 radians variation
+        const velocityAngle = angleToCamera + randomness;
+        
+        const speed = C.COMET_MIN_VELOCITY_X + 
+                     Math.random() * (C.COMET_MAX_VELOCITY_X - C.COMET_MIN_VELOCITY_X);
+        
         const velocity = {
-            x: C.COMET_MIN_VELOCITY_X + 
-               Math.random() * (C.COMET_MAX_VELOCITY_X - C.COMET_MIN_VELOCITY_X),
-            y: C.COMET_MIN_VELOCITY_Y + 
-               Math.random() * (C.COMET_MAX_VELOCITY_Y - C.COMET_MIN_VELOCITY_Y)
+            x: Math.cos(velocityAngle) * speed,
+            y: Math.sin(velocityAngle) * speed
         };
         
         const comet = new Comet(this.scene, x, y, size, velocity);
@@ -73,9 +76,16 @@ export default class CometManager {
                 comet.applyGravity(ship);
             }
             
-            // Remove comets that have left the screen
-            if (comet.isOffScreen()) {
-                // Award points for successfully dodging
+            // Remove comets that are very far from camera
+            const camX = this.scene.cameras.main.scrollX + this.scene.cameras.main.width / 2;
+            const camY = this.scene.cameras.main.scrollY + this.scene.cameras.main.height / 2;
+            const dx = comet.body.position.x - camX;
+            const dy = comet.body.position.y - camY;
+            const distanceFromCamera = Math.sqrt(dx * dx + dy * dy);
+            
+            // Only remove when VERY far (3000 pixels from camera)
+            if (distanceFromCamera > 3000) {
+                // Award points for comet passing by
                 this.score += C.COMET_DODGE_SCORE;
                 this.scene.events.emit('scoreChanged', this.score);
                 
