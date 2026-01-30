@@ -542,24 +542,43 @@ export default class GameScene extends Phaser.Scene {
      * Sync projectiles from network (clients only)
      */
     syncProjectilesFromNetwork(projectileData) {
-        // Remove projectiles that no longer exist
-        for (let i = this.projectiles.length - 1; i >= 0; i--) {
-            if (i >= projectileData.length) {
-                this.projectiles[i].destroy();
-                this.projectiles.splice(i, 1);
+        // Create a map of existing projectiles by ID
+        const existingProjectiles = new Map();
+        for (const proj of this.projectiles) {
+            if (proj.id) {
+                existingProjectiles.set(proj.id, proj);
             }
         }
         
-        // Update or create projectiles
-        for (let i = 0; i < projectileData.length; i++) {
-            const data = projectileData[i];
+        const localPlayerId = this.multiplayerManager ? this.multiplayerManager.localPlayerId : null;
+        const newProjectiles = [];
+        
+        // Update or create projectiles from network data
+        for (const data of projectileData) {
+            // Skip projectiles owned by local player (they manage their own)
+            if (data.ownerPlayerId === localPlayerId) {
+                if (existingProjectiles.has(data.id)) {
+                    newProjectiles.push(existingProjectiles.get(data.id));
+                    existingProjectiles.delete(data.id);
+                }
+                continue;
+            }
             
-            if (i < this.projectiles.length) {
-                // Update existing projectile
-                const proj = this.projectiles[i];
-                this.matter.body.setPosition(proj.body, { x: data.x, y: data.y });
+            if (existingProjectiles.has(data.id)) {
+                // Update existing projectile with interpolation
+                const proj = existingProjectiles.get(data.id);
+                
+                const currentX = proj.body.position.x;
+                const currentY = proj.body.position.y;
+                const lerpFactor = 0.3;
+                const newX = currentX + (data.x - currentX) * lerpFactor;
+                const newY = currentY + (data.y - currentY) * lerpFactor;
+                
+                this.matter.body.setPosition(proj.body, { x: newX, y: newY });
                 this.matter.body.setVelocity(proj.body, { x: data.vx, y: data.vy });
-                proj.age = data.age;
+                
+                newProjectiles.push(proj);
+                existingProjectiles.delete(data.id);
             } else {
                 // Create new projectile
                 const angle = Math.atan2(data.vy, data.vx);
@@ -571,10 +590,31 @@ export default class GameScene extends Phaser.Scene {
                     owner: data.owner
                 };
                 const projectile = new Projectile(this, data.x, data.y, angle, config);
-                projectile.age = data.age;
-                this.projectiles.push(projectile);
+                projectile.id = data.id;
+                projectile.ownerPlayerId = data.ownerPlayerId;
+                newProjectiles.push(projectile);
             }
         }
+        
+        // Keep local player's projectiles
+        for (const proj of this.projectiles) {
+            if (!proj.id || !existingProjectiles.has(proj.id)) {
+                if (proj.ownerPlayerId === localPlayerId || !proj.id) {
+                    newProjectiles.push(proj);
+                }
+            }
+        }
+        
+        // Remove projectiles that no longer exist (except local)
+        for (const [id, proj] of existingProjectiles) {
+            if (proj.ownerPlayerId !== localPlayerId) {
+                proj.destroy();
+            } else {
+                newProjectiles.push(proj);
+            }
+        }
+        
+        this.projectiles = newProjectiles;
     }
     
     /**

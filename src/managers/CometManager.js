@@ -277,14 +277,16 @@ export default class CometManager {
      * Serialize comets for network sync
      */
     serializeComets() {
-        return this.comets.map((comet, index) => ({
-            id: index,
+        return this.comets.map((comet) => ({
+            id: comet.id,
             x: comet.body.position.x,
             y: comet.body.position.y,
             vx: comet.body.velocity.x,
             vy: comet.body.velocity.y,
             radius: comet.radius,
-            depth: comet.depth
+            depth: comet.depth,
+            rotation: comet.rotation,
+            rotationSpeed: comet.rotationSpeed
         }));
     }
     
@@ -292,32 +294,55 @@ export default class CometManager {
      * Sync comets from network data (clients only)
      */
     syncFromNetwork(cometData) {
-        // Remove comets that no longer exist
-        for (let i = this.comets.length - 1; i >= 0; i--) {
-            if (i >= cometData.length) {
-                this.comets[i].destroy();
-                this.comets.splice(i, 1);
-            }
+        // Create a map of existing comets by ID
+        const existingComets = new Map();
+        for (const comet of this.comets) {
+            existingComets.set(comet.id, comet);
         }
         
-        // Update or create comets
-        for (let i = 0; i < cometData.length; i++) {
-            const data = cometData[i];
-            
-            if (i < this.comets.length) {
-                // Update existing comet
-                const comet = this.comets[i];
-                this.scene.matter.body.setPosition(comet.body, { x: data.x, y: data.y });
+        const newComets = [];
+        
+        // Update or create comets from network data
+        for (const data of cometData) {
+            if (existingComets.has(data.id)) {
+                // Update existing comet with smooth interpolation
+                const comet = existingComets.get(data.id);
+                
+                // Interpolate position for smooth movement
+                const currentX = comet.body.position.x;
+                const currentY = comet.body.position.y;
+                const lerpFactor = 0.15;
+                const targetX = currentX + (data.x - currentX) * lerpFactor;
+                const targetY = currentY + (data.y - currentY) * lerpFactor;
+                
+                this.scene.matter.body.setPosition(comet.body, { x: targetX, y: targetY });
                 this.scene.matter.body.setVelocity(comet.body, { x: data.vx, y: data.vy });
                 
+                // Sync rotation
+                comet.rotation = data.rotation;
+                comet.rotationSpeed = data.rotationSpeed;
+                
                 // Also sync gravity sensor
-                this.scene.matter.body.setPosition(comet.gravitySensor, { x: data.x, y: data.y });
+                this.scene.matter.body.setPosition(comet.gravitySensor, { x: targetX, y: targetY });
+                
+                newComets.push(comet);
+                existingComets.delete(data.id);
             } else {
                 // Create new comet
                 const velocity = { x: data.vx, y: data.vy };
                 const comet = new Comet(this.scene, data.x, data.y, data.radius, velocity, data.depth);
-                this.comets.push(comet);
+                comet.id = data.id; // Use network ID
+                comet.rotation = data.rotation;
+                comet.rotationSpeed = data.rotationSpeed;
+                newComets.push(comet);
             }
         }
+        
+        // Remove comets that no longer exist
+        for (const [id, comet] of existingComets) {
+            comet.destroy();
+        }
+        
+        this.comets = newComets;
     }
 }

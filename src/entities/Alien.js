@@ -9,6 +9,9 @@ export default class Alien {
     constructor(scene, x, y) {
         this.scene = scene;
         
+        // Generate unique ID for network sync
+        this.id = `alien_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
         // Create alien body with Matter.js
         this.body = scene.matter.add.circle(x, y, C.ALIEN_SIZE, {
             friction: C.ALIEN_FRICTION,

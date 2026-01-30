@@ -147,8 +147,8 @@ export default class AlienManager {
      * Serialize aliens for network sync
      */
     serializeAliens() {
-        return this.aliens.map((alien, index) => ({
-            id: index,
+        return this.aliens.map((alien) => ({
+            id: alien.id,
             x: alien.body.position.x,
             y: alien.body.position.y,
             vx: alien.body.velocity.x,
@@ -164,36 +164,53 @@ export default class AlienManager {
      * Sync aliens from network data (clients only)
      */
     syncFromNetwork(alienData) {
-        // Remove aliens that no longer exist
-        for (let i = this.aliens.length - 1; i >= 0; i--) {
-            if (i >= alienData.length) {
-                this.aliens[i].destroy();
-                this.aliens.splice(i, 1);
-            }
+        // Create a map of existing aliens by ID
+        const existingAliens = new Map();
+        for (const alien of this.aliens) {
+            existingAliens.set(alien.id, alien);
         }
         
-        // Update or create aliens
-        for (let i = 0; i < alienData.length; i++) {
-            const data = alienData[i];
-            
-            if (i < this.aliens.length) {
-                // Update existing alien
-                const alien = this.aliens[i];
-                this.scene.matter.body.setPosition(alien.body, { x: data.x, y: data.y });
+        const newAliens = [];
+        
+        // Update or create aliens from network data
+        for (const data of alienData) {
+            if (existingAliens.has(data.id)) {
+                // Update existing alien with smooth interpolation
+                const alien = existingAliens.get(data.id);
+                
+                // Interpolate position for smooth movement
+                const currentX = alien.body.position.x;
+                const currentY = alien.body.position.y;
+                const lerpFactor = 0.15;
+                const targetX = currentX + (data.x - currentX) * lerpFactor;
+                const targetY = currentY + (data.y - currentY) * lerpFactor;
+                
+                this.scene.matter.body.setPosition(alien.body, { x: targetX, y: targetY });
                 this.scene.matter.body.setVelocity(alien.body, { x: data.vx, y: data.vy });
                 this.scene.matter.body.setAngle(alien.body, data.rotation);
                 alien.health = data.health;
                 alien.isDocked = data.isDocked;
                 alien.aiState = data.aiState;
+                
+                newAliens.push(alien);
+                existingAliens.delete(data.id);
             } else {
                 // Create new alien
                 const alien = new Alien(this.scene, data.x, data.y);
+                alien.id = data.id; // Use network ID
                 alien.health = data.health;
                 alien.isDocked = data.isDocked;
                 alien.aiState = data.aiState;
                 this.scene.matter.body.setAngle(alien.body, data.rotation);
-                this.aliens.push(alien);
+                newAliens.push(alien);
             }
         }
+        
+        // Remove aliens that no longer exist
+        for (const [id, alien] of existingAliens) {
+            alien.destroy();
+        }
+        
+        this.aliens = newAliens;
     }
 }

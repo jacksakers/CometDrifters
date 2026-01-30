@@ -474,8 +474,7 @@ export default class Ship {
         if (!this.alive || this.isDocked) return;
         if (this.laserCharge < C.LASER_CHARGE_COST) return;
         
-        // Only local player can shoot (and it will sync to network)
-        if (!this.isLocal) return;
+        // All players can shoot (host will sync all projectiles)
         
         // Consume charge
         this.laserCharge -= C.LASER_CHARGE_COST;
@@ -497,6 +496,12 @@ export default class Ship {
                 owner: 'player'
             }
         );
+        
+        // Add unique ID and owner info for network sync
+        projectile.id = `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        if (this.playerState) {
+            projectile.ownerPlayerId = this.playerState.id;
+        }
         
         // Add to scene's projectile list
         if (this.scene.projectiles) {

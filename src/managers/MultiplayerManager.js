@@ -167,10 +167,10 @@ export default class MultiplayerManager {
      * Start host sync loop - host is authoritative for game state
      */
     startHostSync() {
-        // Host syncs game state every 100ms
+        // Host syncs game state every 200ms (reduced for better performance)
         this.updateInterval = setInterval(() => {
             this.syncHostState();
-        }, 100);
+        }, 200);
     }
     
     /**
@@ -183,8 +183,8 @@ export default class MultiplayerManager {
         const cometData = this.scene.cometManager.serializeComets();
         setState('comets', cometData, false); // Use unreliable for faster sync
         
-        // Debug log occasionally
-        if (Math.random() < 0.01) { // 1% chance to log
+        // Debug log very rarely
+        if (Math.random() < 0.002) { // 0.2% chance to log
             console.log('[Host] Syncing:', cometData.length, 'comets,', this.scene.alienManager.getAliens().length, 'aliens,', this.scene.projectiles.length, 'projectiles');
         }
         
@@ -192,22 +192,28 @@ export default class MultiplayerManager {
         const alienData = this.scene.alienManager.serializeAliens();
         setState('aliens', alienData, false);
         
-        // Serialize all projectiles
-        const projectileData = this.scene.projectiles.map((proj, index) => ({
-            id: index,
+        // Serialize all projectiles with unique IDs
+        const projectileData = this.scene.projectiles.map((proj) => ({
+            id: proj.id || `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             x: proj.body.position.x,
             y: proj.body.position.y,
             vx: proj.body.velocity.x,
             vy: proj.body.velocity.y,
             color: proj.color,
             owner: proj.owner,
-            age: proj.age
+            ownerPlayerId: proj.ownerPlayerId || this.localPlayerId
         }));
         setState('projectiles', projectileData, false);
         
-        // Sync world center
-        setState('worldCenterX', this.scene.worldCenterX || 0, false);
-        setState('worldCenterY', this.scene.worldCenterY || 0, false);
+        // Sync world center less frequently to avoid jumps
+        // Only update every 10th sync
+        if (!this.worldCenterSyncCounter) this.worldCenterSyncCounter = 0;
+        this.worldCenterSyncCounter++;
+        if (this.worldCenterSyncCounter >= 10) {
+            setState('worldCenterX', this.scene.worldCenterX || 0, true); // Use reliable for less frequent updates
+            setState('worldCenterY', this.scene.worldCenterY || 0, true);
+            this.worldCenterSyncCounter = 0;
+        }
     }
     
     /**
@@ -255,7 +261,8 @@ export default class MultiplayerManager {
                 const currentX = ship.body.position.x;
                 const currentY = ship.body.position.y;
                 
-                const lerpFactor = 0.3; // Smooth interpolation
+                // Use lower lerp factor for smoother interpolation
+                const lerpFactor = 0.2;
                 const newX = currentX + (netX - currentX) * lerpFactor;
                 const newY = currentY + (netY - currentY) * lerpFactor;
                 
@@ -284,8 +291,8 @@ export default class MultiplayerManager {
         if (!isHost()) {
             const cometData = getState('comets');
             if (cometData && Array.isArray(cometData)) {
-                // Debug log occasionally
-                if (Math.random() < 0.01) { // 1% chance to log
+                // Debug log very rarely
+                if (Math.random() < 0.002) { // 0.2% chance to log
                     console.log('[Client] Received:', cometData.length, 'comets from host');
                 }
                 this.scene.cometManager.syncFromNetwork(cometData);
@@ -303,12 +310,16 @@ export default class MultiplayerManager {
                 this.scene.syncProjectilesFromNetwork(projectileData);
             }
             
-            // Sync world center from host
+            // Sync world center from host (interpolated)
             const worldCenterX = getState('worldCenterX');
             const worldCenterY = getState('worldCenterY');
             if (worldCenterX !== undefined && worldCenterY !== undefined) {
-                this.scene.worldCenterX = worldCenterX;
-                this.scene.worldCenterY = worldCenterY;
+                // Interpolate world center to avoid jumps
+                const currentX = this.scene.worldCenterX || worldCenterX;
+                const currentY = this.scene.worldCenterY || worldCenterY;
+                const lerpFactor = 0.05; // Very slow interpolation
+                this.scene.worldCenterX = currentX + (worldCenterX - currentX) * lerpFactor;
+                this.scene.worldCenterY = currentY + (worldCenterY - currentY) * lerpFactor;
             }
         }
     }
@@ -387,17 +398,19 @@ export default class MultiplayerManager {
     update() {
         if (!this.isInitialized) return;
         
-        // Update local player state
-        const localPlayer = this.getLocalPlayer();
-        if (localPlayer && localPlayer.ship && localPlayer.ship.alive) {
-            this.updatePlayerState(localPlayer.ship, localPlayer.playerState);
+        // Update local player state (every 3 frames for performance)
+        if (this.scene.game.loop.frame % 3 === 0) {
+            const localPlayer = this.getLocalPlayer();
+            if (localPlayer && localPlayer.ship && localPlayer.ship.alive) {
+                this.updatePlayerState(localPlayer.ship, localPlayer.playerState);
+            }
         }
         
         // Update remote players from network
         this.updateRemotePlayers();
         
-        // Update leaderboard periodically
-        if (this.scene.time.now % 1000 < 20) { // Roughly once per second
+        // Update leaderboard less frequently (every 2 seconds)
+        if (this.scene.time.now % 2000 < 20) {
             this.updateLeaderboard();
         }
     }

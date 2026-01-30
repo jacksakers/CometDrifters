@@ -10,6 +10,9 @@ export default class Comet {
         this.scene = scene;
         this.radius = size;
         
+        // Generate unique ID for network sync
+        this.id = `comet_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
         // Depth for visual layering (1.0 = near, 0.4 = far)
         this.depth = depth !== null ? depth : 
             (Math.random() < 0.3 ? C.DEPTH_NEAR : 
