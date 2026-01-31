@@ -296,6 +296,12 @@ export default class GameScene extends Phaser.Scene {
             if (ship.isLocal) {
                 this.events.emit('showDeathMessage', reason);
             }
+
+            // Decrease score as penalty
+            const penalty = Math.floor(this.cometManager.score * 0.5);
+            const newScore = Math.max(0, this.cometManager.score - penalty);
+            this.cometManager.score = newScore;
+            this.events.emit('updateScore', newScore);
             
             // Respawn after 2 seconds
             this.time.delayedCall(2000, () => {
@@ -313,6 +319,10 @@ export default class GameScene extends Phaser.Scene {
         } else {
             // Single player - game over
             this.gameActive = false;
+
+            // Set score to zero after death
+            this.cometManager.score = 0;
+            this.events.emit('updateScore', 0);
             
             this.time.delayedCall(1000, () => {
                 this.events.emit('gameOver', {

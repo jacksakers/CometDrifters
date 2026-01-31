@@ -544,7 +544,7 @@ export default class Ship {
         
         if (this.health <= 0) {
             this.health = 0;
-            this.destroy('Hit by alien fire');
+            this.destroy('Hit by laser');
         }
     }
     
