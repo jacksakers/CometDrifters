@@ -500,6 +500,11 @@ export default class Ship {
             this.scene.projectiles.push(projectile);
         }
         
+        // Play laser sound
+        if (this.scene.audioManager) {
+            this.scene.audioManager.playLaserSound();
+        }
+        
         // Broadcast shoot event to other players (for multiplayer)
         if (this.isLocal && this.playerState) {
             this.playerState.setState('lastShot', {
@@ -768,6 +773,11 @@ export default class Ship {
      * Create explosion effect
      */
     createExplosion() {
+        // Play explosion sound
+        if (this.scene.audioManager) {
+            this.scene.audioManager.playExplosionSound();
+        }
+        
         // Create explosion particles (Phaser 3.60+ API)
         const emitter = this.scene.add.particles(this.body.position.x, this.body.position.y, 'particle', {
             speed: { min: 100, max: 300 },

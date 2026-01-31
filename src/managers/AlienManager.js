@@ -130,7 +130,7 @@ export default class AlienManager {
             const distance = Math.sqrt(dx * dx + dy * dy);
             
             if (distance > buffer * 2) {
-                alien.destroy();
+                alien.cleanup(); // Silent removal without explosion
                 this.aliens.splice(i, 1);
                 continue;
             }

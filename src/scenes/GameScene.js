@@ -6,6 +6,8 @@ import InputManager from '../managers/InputManager.js';
 import MultiplayerManager from '../managers/MultiplayerManager.js';
 import * as C from '../config/constants.js';
 
+import AudioManager from '../managers/AudioManager.js';
+
 /**
  * GameScene - Main game loop
  * Handles physics simulation, collision detection, and game state
@@ -22,6 +24,10 @@ export default class GameScene extends Phaser.Scene {
         graphics.fillCircle(4, 4, 4);
         graphics.generateTexture('particle', 8, 8);
         graphics.destroy();
+        
+        // Preload audio
+        this.audioManager = new AudioManager(this);
+        this.audioManager.preload();
     }
     
     async create() {
@@ -36,6 +42,9 @@ export default class GameScene extends Phaser.Scene {
         this.cometManager = new CometManager(this);
         this.alienManager = new AlienManager(this);
         this.multiplayerManager = new MultiplayerManager(this);
+        
+        // Create audio manager
+        this.audioManager.create();
         
         // Projectile list
         this.projectiles = [];
@@ -394,6 +403,11 @@ export default class GameScene extends Phaser.Scene {
                 this.projectiles.splice(i, 1);
             }
         }
+        
+        // Update audio manager (alien proximity detection)
+        if (this.audioManager && this.ship) {
+            this.audioManager.update(this.ship, this.alienManager.aliens);
+        }
     }
     
     /**
@@ -548,6 +562,11 @@ export default class GameScene extends Phaser.Scene {
         
         if (this.alienManager) {
             this.alienManager.destroy();
+        }
+        
+        // Cleanup audio
+        if (this.audioManager) {
+            this.audioManager.destroy();
         }
     }
 }

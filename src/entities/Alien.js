@@ -320,6 +320,11 @@ export default class Alien {
             this.scene.projectiles.push(projectile);
         }
         
+        // Play laser sound
+        if (this.scene.audioManager) {
+            this.scene.audioManager.playLaserSound();
+        }
+        
         // Broadcast shoot event for multiplayer
         // Each player broadcasts shots from their owned aliens
         if (this.scene.multiplayerManager && this.scene.multiplayerManager.isMultiplayerActive()) {
@@ -663,11 +668,33 @@ export default class Alien {
     }
     
     /**
+     * Cleanup alien without explosion (for off-screen removal)
+     */
+    cleanup() {
+        this.alive = false;
+        
+        // Remove body
+        if (this.body && this.scene.matter.world) {
+            this.scene.matter.world.remove(this.body);
+        }
+        
+        // Remove graphics
+        if (this.graphics) {
+            this.graphics.destroy();
+        }
+    }
+    
+    /**
      * Create explosion effect
      */
     createExplosion() {
         const x = this.body.position.x;
         const y = this.body.position.y;
+        
+        // Play explosion sound
+        if (this.scene.audioManager) {
+            this.scene.audioManager.playExplosionSound();
+        }
         
         // Create explosion particles
         for (let i = 0; i < C.EXPLOSION_PARTICLE_COUNT; i++) {

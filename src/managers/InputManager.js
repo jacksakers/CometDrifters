@@ -173,7 +173,7 @@ export default class InputManager {
      */
     updateKeyboardInput() {
         // Thrust
-        if (this.cursors.up.isDown || this.wKey.isDown || this.spaceKey.isDown) {
+        if (this.cursors.up.isDown || this.wKey.isDown ) {
             this.state.thrust = true;
         }
         
@@ -201,13 +201,13 @@ export default class InputManager {
             this.state.special = true;
         }
         
-        // Lock-on targeting - toggle on/off with shift key
-        const shiftPressed = this.shiftKey.isDown;
-        if (shiftPressed && !this.lastShiftPressed) {
-            // Shift just pressed, toggle the state
+        // Lock-on targeting - toggle on/off with space key
+        const spacePressed = this.spaceKey.isDown;
+        if (spacePressed && !this.lastSpacePressed) {
+            // Space just pressed, toggle the state
             this.lockOnToggled = !this.lockOnToggled;
         }
-        this.lastShiftPressed = shiftPressed;
+        this.lastSpacePressed = spacePressed;
         
         // Set state based on toggle
         if (this.lockOnToggled) {

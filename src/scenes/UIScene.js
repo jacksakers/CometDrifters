@@ -8,6 +8,7 @@ import Leaderboard from '../ui/Leaderboard.js';
 import NotificationSystem from '../ui/NotificationSystem.js';
 import PlayerTracking from '../ui/PlayerTracking.js';
 import DeathMessage from '../ui/DeathMessage.js';
+import SettingsMenu from '../ui/SettingsMenu.js';
 
 /**
  * UIScene - Overlay scene for HUD elements
@@ -35,6 +36,7 @@ export default class UIScene extends Phaser.Scene {
         this.notificationSystem = new NotificationSystem(this);
         this.playerTracking = new PlayerTracking(this);
         this.deathMessage = new DeathMessage(this);
+        this.settingsMenu = new SettingsMenu(this);
         
         // Listen to game events
         this.gameScene.events.on('updateScore', this.updateScore, this);
@@ -91,6 +93,7 @@ export default class UIScene extends Phaser.Scene {
         this.combatUI.reposition();
         this.fuelGauge.reposition();
         this.controlsHint.reposition();
+        this.settingsMenu.reposition();
     }
     
     /**

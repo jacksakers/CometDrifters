@@ -100,7 +100,7 @@ export default class FuelGauge {
     reposition() {
         const bounds = this.scene.getUIBounds();
         const isMobile = this.scene.gameScene.inputManager.isMobileMode();
-        const mobileOffset = isMobile ? 100 : 20;
+        const mobileOffset = isMobile ? 400 : 20;
         const bottomY = bounds.bottom - mobileOffset;
         
         if (this.fuelLabel) {
