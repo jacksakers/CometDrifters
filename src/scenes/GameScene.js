@@ -69,6 +69,9 @@ export default class GameScene extends Phaser.Scene {
         // Game state
         this.gameActive = true;
         
+        // Track auto lock-on state for UI notification
+        this.previousAutoLockState = false;
+        
         // World center tracking (persistent origin for spawning)
         // Initialize to starting position, then track average of all players
         this.worldCenterX = C.GAME_WIDTH / 2;
@@ -328,6 +331,12 @@ export default class GameScene extends Phaser.Scene {
         
         // Get input state (only for local player)
         const inputState = this.ship ? this.inputManager.update(this.ship) : null;
+        
+        // Check for auto lock-on toggle state change
+        if (this.inputManager && this.inputManager.lockOnToggled !== this.previousAutoLockState) {
+            this.previousAutoLockState = this.inputManager.lockOnToggled;
+            this.events.emit('autoLockOnToggle', this.inputManager.lockOnToggled);
+        }
         
         // Update local ship
         if (this.ship && this.ship.alive && this.ship.isLocal) {
