@@ -5,6 +5,13 @@ export const GAME_WIDTH = 1200;
 export const GAME_HEIGHT = 800;
 export const BACKGROUND_COLOR = '#050510';
 
+// Mobile Settings
+export const UI_MAX_WIDTH = 1200; // Max width for UI elements
+export const MOBILE_BREAKPOINT = 768; // Screen width to trigger mobile mode
+export const JOYSTICK_SIZE = 120; // Virtual joystick size
+export const JOYSTICK_DEAD_ZONE = 0.2; // Joystick dead zone (0-1)
+export const MOBILE_BUTTON_SIZE = 70; // Mobile button size
+
 // Physics Settings
 export const GRAVITY_X = 0;
 export const GRAVITY_Y = 0;

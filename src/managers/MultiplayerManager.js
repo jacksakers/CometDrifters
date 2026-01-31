@@ -2,7 +2,7 @@ import * as C from '../config/constants.js';
 import Projectile from '../entities/Projectile.js';
 
 // Playroom Kit is loaded globally via UMD bundle in game.html
-const { insertCoin, onPlayerJoin, myPlayer, isHost, getState, setState } = window.Playroom;
+const { insertCoin, onPlayerJoin, myPlayer, isHost, getState, setState, Joystick } = window.Playroom;
 
 /**
  * MultiplayerManager - Handles Playroom Kit integration
@@ -170,11 +170,27 @@ export default class MultiplayerManager {
         // Create ship for this player
         const ship = this.scene.createPlayerShip(x, y, isLocal, playerState);
         
+        // Create Playroom joystick for this player (will only show UI for local player)
+        const joystick = new Joystick(playerState, {
+            type: "angular", // or "dpad" - angular is better for space games
+            buttons: [
+                { id: "shoot", label: "Shoot" },
+                { id: "lockOn", label: "Lock-On" }
+            ]
+        });
+        
+        // If this is the local player, give joystick to InputManager
+        if (isLocal) {
+            this.scene.inputManager.setJoystick(joystick);
+            console.log('[Multiplayer] Joystick created for local player');
+        }
+        
         // Store player data
         this.players.set(playerId, {
             ship,
             playerState,
-            isLocal
+            isLocal,
+            joystick
         });
         
         // Listen for player quitting

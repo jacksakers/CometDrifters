@@ -3,11 +3,14 @@ import * as C from '../config/constants.js';
 /**
  * InputManager - Abstracts input from keyboard/touch/gamepad
  * Converts various input sources into generic actions
- * This makes it easy to later add Playroom Kit mobile controls
+ * Uses Playroom Kit joystick for mobile/touch controls
  */
 export default class InputManager {
     constructor(scene) {
         this.scene = scene;
+        
+        // Detect if mobile device
+        this.isMobile = this.detectMobile();
         
         // Current input state
         this.state = {
@@ -21,6 +24,14 @@ export default class InputManager {
             lockOn: false
         };
         
+        // Playroom joystick (set by MultiplayerManager when player joins)
+        this.joystick = null;
+        
+        // Lock-on toggle state
+        this.lockOnToggled = false;
+        this.lastLockOnPressed = false;
+        this.lastShiftPressed = false; // Track keyboard shift key for toggle
+        
         // Setup keyboard input
         this.cursors = scene.input.keyboard.createCursorKeys();
         this.wKey = scene.input.keyboard.addKey('W');
@@ -31,39 +42,27 @@ export default class InputManager {
         this.zKey = scene.input.keyboard.addKey('Z');
         this.xKey = scene.input.keyboard.addKey('X');
         this.shiftKey = scene.input.keyboard.addKey('SHIFT');
-        
-        // Touch controls
-        this.touchActive = false;
-        this.touchX = null;
-        this.touchY = null;
-        this.lastShipAngle = 0;
-        
-        // Setup touch listeners
-        this.setupTouchControls();
     }
     
     /**
-     * Setup touch control handlers
+     * Detect if running on mobile device
      */
-    setupTouchControls() {
-        this.scene.input.on('pointerdown', (pointer) => {
-            this.touchActive = true;
-            this.touchX = pointer.x;
-            this.touchY = pointer.y;
-        });
+    detectMobile() {
+        // Check if touch is available and screen is small
+        const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        const isSmallScreen = window.innerWidth <= C.MOBILE_BREAKPOINT;
         
-        this.scene.input.on('pointermove', (pointer) => {
-            if (this.touchActive) {
-                this.touchX = pointer.x;
-                this.touchY = pointer.y;
-            }
-        });
+        // Also check user agent for mobile devices
+        const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         
-        this.scene.input.on('pointerup', () => {
-            this.touchActive = false;
-            this.touchX = null;
-            this.touchY = null;
-        });
+        return (hasTouch && isSmallScreen) || isMobileUA;
+    }
+    
+    /**
+     * Set Playroom joystick (called by MultiplayerManager)
+     */
+    setJoystick(joystick) {
+        this.joystick = joystick;
     }
     
     /**
@@ -82,15 +81,89 @@ export default class InputManager {
             lockOn: false
         };
         
-        // Keyboard input
-        this.updateKeyboardInput();
-        
-        // Touch input (if ship exists)
-        if (ship && ship.alive) {
-            this.updateTouchInput(ship);
+        // Playroom joystick input (takes priority if available)
+        if (this.joystick) {
+            this.updateJoystickInput(ship);
         }
         
+        // Always also read keyboard input (so desktop users can use keyboard)
+        this.updateKeyboardInput();
+        
         return this.state;
+    }
+    
+    /**
+     * Process Playroom joystick input
+     */
+    updateJoystickInput(ship) {
+        if (!this.joystick) return;
+        
+        // Check if joystick is actually being pressed/moved
+        if (this.joystick.isJoystickPressed()) {
+            let angle = this.joystick.angle();
+            
+            // Adjust joystick angle to match ship coordinate system
+            // Negate the angle to flip the Y-axis (joystick Y is inverted from physics Y)
+            if (angle !== null) {
+                angle = -angle;
+                
+                // Normalize to -PI to PI range
+                while (angle > Math.PI) angle -= Math.PI * 2;
+                while (angle < -Math.PI) angle += Math.PI * 2;
+            }
+            
+            // Joystick angle controls ship direction
+            // Compare joystick angle to ship's current angle and rotate towards it
+            if (ship && ship.body && angle !== null) {
+                let currentAngle = ship.body.angle;
+                
+                // Normalize current ship angle to -PI to PI range
+                while (currentAngle > Math.PI) currentAngle -= Math.PI * 2;
+                while (currentAngle < -Math.PI) currentAngle += Math.PI * 2;
+                
+                // Calculate the difference between joystick angle and ship angle
+                let angleDiff = angle - currentAngle;
+                
+                // Normalize angle difference to -PI to PI range
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                
+                // Rotate towards the target angle
+                const rotationThreshold = 0.15; // Dead zone for rotation
+                if (Math.abs(angleDiff) > rotationThreshold) {
+                    if (angleDiff > 0) {
+                        this.state.rotateRight = true;
+                    } else {
+                        this.state.rotateLeft = true;
+                    }
+                }
+                
+                // Thrust when joystick is pressed (and not pointing down)
+                this.state.thrust = true;
+                // }
+
+                // Log all of the above data for debugging
+                console.log(`Joystick Angle: ${angle.toFixed(2)}, Ship Angle: ${currentAngle.toFixed(2)}, Thrust: ${this.state.thrust}, RotateLeft: ${this.state.rotateLeft}, RotateRight: ${this.state.rotateRight}, Dock: ${this.state.dock}, Brake: ${this.state.brake}`);
+            }
+        }
+        
+        // Shoot button
+        if (this.joystick.isPressed('shoot')) {
+            this.state.shoot = true;
+        }
+        
+        // Lock-on as a toggle switch
+        const lockOnPressed = this.joystick.isPressed('lockOn');
+        if (lockOnPressed && !this.lastLockOnPressed) {
+            // Button just pressed, toggle the state
+            this.lockOnToggled = !this.lockOnToggled;
+        }
+        this.lastLockOnPressed = lockOnPressed;
+        
+        // Set state based on toggle
+        if (this.lockOnToggled) {
+            this.state.lockOn = true;
+        }
     }
     
     /**
@@ -126,57 +199,18 @@ export default class InputManager {
             this.state.special = true;
         }
         
-        // Lock-on targeting
-        if (this.shiftKey.isDown) {
+        // Lock-on targeting - toggle on/off with shift key
+        const shiftPressed = this.shiftKey.isDown;
+        if (shiftPressed && !this.lastShiftPressed) {
+            // Shift just pressed, toggle the state
+            this.lockOnToggled = !this.lockOnToggled;
+        }
+        this.lastShiftPressed = shiftPressed;
+        
+        // Set state based on toggle
+        if (this.lockOnToggled) {
             this.state.lockOn = true;
         }
-    }
-    
-    /**
-     * Process touch input
-     * Touch on left half = rotate toward finger
-     * Touch on right half = thrust toward finger
-     */
-    updateTouchInput(ship) {
-        if (!this.touchActive || this.touchX === null || this.touchY === null) {
-            return;
-        }
-        
-        const shipX = ship.body.position.x;
-        const shipY = ship.body.position.y;
-        const screenWidth = this.scene.cameras.main.width;
-        
-        // Calculate angle to touch point
-        const dx = this.touchX - shipX;
-        const dy = this.touchY - shipY;
-        const targetAngle = Math.atan2(dy, dx);
-        
-        // Normalize angles to -PI to PI
-        let currentAngle = ship.body.angle;
-        while (currentAngle > Math.PI) currentAngle -= Math.PI * 2;
-        while (currentAngle < -Math.PI) currentAngle += Math.PI * 2;
-        
-        let angleDiff = targetAngle - currentAngle;
-        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-        
-        // Determine rotation direction
-        if (Math.abs(angleDiff) > 0.1) { // Deadzone
-            if (angleDiff > 0) {
-                this.state.rotateRight = true;
-            } else {
-                this.state.rotateLeft = true;
-            }
-        }
-        
-        // If touch is on right half or ship is roughly pointing at target, thrust
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        if (this.touchX > screenWidth / 2 || 
-            (Math.abs(angleDiff) < 0.3 && distance > 50)) {
-            this.state.thrust = true;
-        }
-        
-        this.lastShipAngle = currentAngle;
     }
     
     /**
@@ -184,6 +218,13 @@ export default class InputManager {
      */
     getState() {
         return this.state;
+    }
+    
+    /**
+     * Check if in mobile mode
+     */
+    isMobileMode() {
+        return this.isMobile;
     }
     
     /**
@@ -197,9 +238,6 @@ export default class InputManager {
      * Cleanup
      */
     destroy() {
-        // Remove touch listeners
-        this.scene.input.off('pointerdown');
-        this.scene.input.off('pointermove');
-        this.scene.input.off('pointerup');
+        this.joystick = null;
     }
 }

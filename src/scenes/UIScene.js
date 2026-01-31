@@ -13,6 +13,9 @@ export default class UIScene extends Phaser.Scene {
         // Get reference to game scene
         this.gameScene = this.scene.get('GameScene');
         
+        // Track window resize for responsive UI
+        this.scale.on('resize', this.handleResize, this);
+        
         // Create UI elements
         this.createHeader();
         this.createCombatUI();
@@ -39,13 +42,76 @@ export default class UIScene extends Phaser.Scene {
     }
     
     /**
+     * Get UI boundaries with max width constraint
+     * Returns { left, right, top, bottom, width, height, centerX }
+     */
+    getUIBounds() {
+        const screenWidth = this.scale.width;
+        const screenHeight = this.scale.height;
+        
+        // Calculate left margin to center UI if screen is wider than max width
+        const uiWidth = Math.min(screenWidth, C.UI_MAX_WIDTH);
+        const leftMargin = (screenWidth - uiWidth) / 2;
+        
+        return {
+            left: leftMargin + C.UI_PADDING,
+            right: leftMargin + uiWidth - C.UI_PADDING,
+            top: C.UI_PADDING,
+            bottom: screenHeight - C.UI_PADDING,
+            width: uiWidth,
+            height: screenHeight,
+            centerX: leftMargin + uiWidth / 2
+        };
+    }
+    
+    /**
+     * Handle window resize
+     */
+    handleResize(gameSize) {
+        // Reposition UI elements based on new size
+        this.repositionUI();
+    }
+    
+    /**
+     * Reposition all UI elements (called on resize)
+     */
+    repositionUI() {
+        const bounds = this.getUIBounds();
+        
+        // Update header positions
+        if (this.titleText) {
+            this.titleText.setPosition(bounds.left, bounds.top);
+        }
+        
+        // Update fuel gauge position
+        if (this.fuelLabel) {
+            const bottomY = bounds.bottom - 20;
+            this.fuelLabel.setPosition(bounds.centerX, bottomY - 25);
+            this.fuelBarBg.setPosition(bounds.centerX, bottomY);
+            this.fuelBar.setPosition(bounds.centerX, bottomY);
+        }
+        
+        // Update lock-on indicator
+        if (this.lockOnIndicator) {
+            this.lockOnIndicator.setPosition(bounds.centerX, bounds.top);
+        }
+        
+        // Update controls hint
+        if (this.controlsText) {
+            this.controlsText.setPosition(bounds.centerX, bounds.height - 10);
+        }
+    }
+    
+    /**
      * Create header with title and score
      */
     createHeader() {
+        const bounds = this.getUIBounds();
+        
         // Title
         this.titleText = this.add.text(
-            C.UI_PADDING, 
-            C.UI_PADDING, 
+            bounds.left, 
+            bounds.top, 
             'COMET CHASERS', 
             {
                 fontFamily: C.UI_FONT_FAMILY,
@@ -53,12 +119,12 @@ export default class UIScene extends Phaser.Scene {
                 color: C.UI_FONT_COLOR,
                 fontStyle: 'bold'
             }
-        );
+        ).setScrollFactor(0);
         
         // Score label
         this.add.text(
-            C.UI_PADDING, 
-            C.UI_PADDING + 35, 
+            bounds.left, 
+            bounds.top + 35, 
             'Score:', 
             {
                 fontFamily: C.UI_FONT_FAMILY,
@@ -66,12 +132,12 @@ export default class UIScene extends Phaser.Scene {
                 color: '#ffffff',
                 alpha: 0.8
             }
-        );
+        ).setScrollFactor(0);
         
         // Score value
         this.scoreText = this.add.text(
-            C.UI_PADDING + 55, 
-            C.UI_PADDING + 35, 
+            bounds.left + 55, 
+            bounds.top + 35, 
             '0', 
             {
                 fontFamily: C.UI_FONT_FAMILY,
@@ -79,15 +145,16 @@ export default class UIScene extends Phaser.Scene {
                 color: '#f9cb28',
                 fontStyle: 'bold'
             }
-        );
+        ).setScrollFactor(0);
     }
     
     /**
      * Create combat UI - health, laser charge, special weapon
      */
     createCombatUI() {
-        const rightX = C.GAME_WIDTH - C.UI_PADDING;
-        const topY = C.UI_PADDING;
+        const bounds = this.getUIBounds();
+        const rightX = bounds.right;
+        const topY = bounds.top;
         
         // Health Bar
         this.add.text(
@@ -115,7 +182,7 @@ export default class UIScene extends Phaser.Scene {
             healthBarHeight,
             0x000000,
             0.6
-        ).setOrigin(0.5, 0);
+        ).setOrigin(0.5, 0).setScrollFactor(0);
         this.healthBarBg.setStrokeStyle(2, 0xffffff, 0.4);
         
         // Health bar (green)
@@ -125,7 +192,7 @@ export default class UIScene extends Phaser.Scene {
             healthBarWidth - 4,
             healthBarHeight - 4,
             0x00ff00
-        ).setOrigin(0.5, 0);
+        ).setOrigin(0.5, 0).setScrollFactor(0);
         
         this.healthBarMaxWidth = healthBarWidth - 4;
         
@@ -143,7 +210,7 @@ export default class UIScene extends Phaser.Scene {
                 alpha: 0.8,
                 fontStyle: 'bold'
             }
-        ).setOrigin(1, 0);
+        ).setOrigin(1, 0).setScrollFactor(0);
         
         const laserBarY = laserY + 20;
         
@@ -155,7 +222,7 @@ export default class UIScene extends Phaser.Scene {
             healthBarHeight,
             0x000000,
             0.6
-        ).setOrigin(0.5, 0);
+        ).setOrigin(0.5, 0).setScrollFactor(0);
         this.laserBarBg.setStrokeStyle(2, 0x00ffff, 0.4);
         
         // Laser bar (cyan)
@@ -165,7 +232,7 @@ export default class UIScene extends Phaser.Scene {
             healthBarWidth - 4,
             healthBarHeight - 4,
             0x00ffff
-        ).setOrigin(0.5, 0);
+        ).setOrigin(0.5, 0).setScrollFactor(0);
         
         this.laserBarMaxWidth = healthBarWidth - 4;
         
@@ -213,8 +280,8 @@ export default class UIScene extends Phaser.Scene {
         
         // Lock-On Indicator (centered at top)
         this.lockOnIndicator = this.add.text(
-            C.GAME_WIDTH / 2,
-            C.UI_PADDING,
+            bounds.centerX,
+            bounds.top,
             '\u25c4 LOCKED ON \u25ba',
             {
                 fontFamily: C.UI_FONT_FAMILY,
@@ -224,7 +291,7 @@ export default class UIScene extends Phaser.Scene {
                 stroke: '#000000',
                 strokeThickness: 3
             }
-        ).setOrigin(0.5, 0).setVisible(false);
+        ).setOrigin(0.5, 0).setVisible(false).setScrollFactor(0);
         
         // Pulsing animation for lock-on
         this.lockOnTween = this.tweens.add({
@@ -242,12 +309,11 @@ export default class UIScene extends Phaser.Scene {
      * Create fuel gauge at bottom of screen
      */
     createFuelGauge() {
-        const width = C.GAME_WIDTH;
-        const height = C.GAME_HEIGHT;
+        const bounds = this.getUIBounds();
         const barWidth = 250;
         const barHeight = 25;
-        const centerX = width / 2;
-        const bottomY = height - 40;
+        const centerX = bounds.centerX;
+        const bottomY = bounds.bottom - 20;
         
         // Label
         this.fuelLabel = this.add.text(
@@ -260,7 +326,7 @@ export default class UIScene extends Phaser.Scene {
                 color: '#f9cb28',
                 fontStyle: 'bold'
             }
-        ).setOrigin(0.5);
+        ).setOrigin(0.5).setScrollFactor(0);
         
         // Background bar
         this.fuelBarBg = this.add.rectangle(
@@ -270,7 +336,7 @@ export default class UIScene extends Phaser.Scene {
             barHeight, 
             0x000000, 
             0.5
-        );
+        ).setScrollFactor(0);
         this.fuelBarBg.setStrokeStyle(2, 0xffffff, 0.4);
         
         // Fuel bar (gradient approximation with multiple rectangles)
@@ -280,7 +346,7 @@ export default class UIScene extends Phaser.Scene {
             barWidth - 4, 
             barHeight - 4, 
             0x4ade80
-        ).setOrigin(0.5);
+        ).setOrigin(0.5).setScrollFactor(0);
         
         // Store original width for scaling
         this.fuelBarMaxWidth = barWidth - 4;
@@ -290,9 +356,14 @@ export default class UIScene extends Phaser.Scene {
      * Create controls hint
      */
     createControlsHint() {
+        const bounds = this.getUIBounds();
+        
+        // Hide controls hint on mobile (joystick is self-explanatory)
+        const isMobile = this.gameScene.inputManager.isMobileMode();
+        
         this.controlsText = this.add.text(
-            C.GAME_WIDTH / 2, 
-            C.GAME_HEIGHT - 10, 
+            bounds.centerX, 
+            bounds.height - 10, 
             'Arrow Keys: Move | S: Dock | Z: Laser | SHIFT: Lock-On | ESC: Reset', 
             {
                 fontFamily: C.UI_FONT_FAMILY,
@@ -300,16 +371,18 @@ export default class UIScene extends Phaser.Scene {
                 color: '#ffffff',
                 alpha: 0.4
             }
-        ).setOrigin(0.5, 1);
+        ).setOrigin(0.5, 1).setScrollFactor(0).setVisible(!isMobile);
         
-        // Fade out after 10 seconds
-        this.time.delayedCall(10000, () => {
-            this.tweens.add({
-                targets: this.controlsText,
-                alpha: 0,
-                duration: 1000
+        // Fade out after 10 seconds (only if visible)
+        if (!isMobile) {
+            this.time.delayedCall(10000, () => {
+                this.tweens.add({
+                    targets: this.controlsText,
+                    alpha: 0,
+                    duration: 1000
+                });
             });
-        });
+        }
     }
     
     /**

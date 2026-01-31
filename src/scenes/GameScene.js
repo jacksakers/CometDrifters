@@ -57,9 +57,9 @@ export default class GameScene extends Phaser.Scene {
         // No camera bounds - infinite world
         // Remove world bounds too - no boundaries
         
-        // Center camera on ship initially
-        this.cameras.main.scrollX = this.ship.body.position.x - C.GAME_WIDTH / 2;
-        this.cameras.main.scrollY = this.ship.body.position.y - C.GAME_HEIGHT / 2;
+        // Center camera on ship initially (use actual screen dimensions)
+        this.cameras.main.scrollX = this.ship.body.position.x - this.scale.width / 2;
+        this.cameras.main.scrollY = this.ship.body.position.y - this.scale.height / 2;
         
         console.log('[GameScene] Camera scroll set to:', this.cameras.main.scrollX, this.cameras.main.scrollY);
         
@@ -334,8 +334,8 @@ export default class GameScene extends Phaser.Scene {
             this.ship.update(inputState, this.cometManager.getComets(), this.alienManager.getAliens());
             
             // Manually update camera to follow ship with smooth lerp
-            const targetX = this.ship.body.position.x - C.GAME_WIDTH / 2;
-            const targetY = this.ship.body.position.y - C.GAME_HEIGHT / 2;
+            const targetX = this.ship.body.position.x - this.scale.width / 2;
+            const targetY = this.ship.body.position.y - this.scale.height / 2;
             
             // Smooth camera movement with lerp
             this.cameras.main.scrollX += (targetX - this.cameras.main.scrollX) * 0.1;
@@ -391,8 +391,8 @@ export default class GameScene extends Phaser.Scene {
      * Generate stars around current camera position
      */
     generateStarsAroundCamera() {
-        const camX = this.cameras.main.scrollX + C.GAME_WIDTH / 2;
-        const camY = this.cameras.main.scrollY + C.GAME_HEIGHT / 2;
+        const camX = this.cameras.main.scrollX + this.scale.width / 2;
+        const camY = this.cameras.main.scrollY + this.scale.height / 2;
         
         // Determine which grid cells are visible
         const minGridX = Math.floor((camX - C.GAME_WIDTH) / this.gridSize);

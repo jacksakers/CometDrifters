@@ -308,8 +308,7 @@ export default class CometManager {
             vy: comet.body.velocity.y,
             radius: comet.radius,
             depth: comet.depth,
-            rotation: comet.rotation,
-            rotationSpeed: comet.rotationSpeed
+            rotationSpeed: comet.rotationSpeed // Direction encoded in sign (+ = CCW, - = CW)
         }));
     }
     
@@ -334,8 +333,8 @@ export default class CometManager {
         
         // Set network ID and properties
         comet.id = data.id;
-        comet.rotation = data.rotation || 0;
         comet.rotationSpeed = data.rotationSpeed || 0;
+        // rotation is randomly initialized locally and updates based on rotationSpeed
         
         this.comets.push(comet);
         return comet;
@@ -369,11 +368,6 @@ export default class CometManager {
                 this.scene.matter.body.setPosition(comet.body, { x: targetX, y: targetY });
                 this.scene.matter.body.setVelocity(comet.body, { x: data.vx, y: data.vy });
                 
-                // Smoothly interpolate rotation speed (rotation will follow naturally)
-                // This avoids jumpy rotation by gradually adjusting the spin rate
-                const rotationSpeedLerp = 0.01; // Very aggressive smoothing for butter-smooth rotation
-                comet.rotationSpeed += (data.rotationSpeed - comet.rotationSpeed) * rotationSpeedLerp;
-                
                 // Also sync gravity sensor
                 this.scene.matter.body.setPosition(comet.gravitySensor, { x: targetX, y: targetY });
                 
@@ -384,8 +378,8 @@ export default class CometManager {
                 const velocity = { x: data.vx, y: data.vy };
                 const comet = new Comet(this.scene, data.x, data.y, data.radius, velocity, data.depth);
                 comet.id = data.id; // Use network ID
-                comet.rotation = data.rotation;
                 comet.rotationSpeed = data.rotationSpeed;
+                // rotation initializes randomly locally, spins based on rotationSpeed
                 newComets.push(comet);
             }
         }
