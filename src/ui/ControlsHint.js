@@ -18,7 +18,7 @@ export default class ControlsHint {
         this.controlsText = this.scene.add.text(
             bounds.centerX, 
             bounds.height - 10, 
-            'Arrow Keys: Move | S: Dock | Z: Laser | SHIFT: Lock-On | ESC: Reset', 
+            'Arrow Keys: Move | Z: Laser | SPACE: Engage Auto Lock-On | ESC: Relaunch', 
             {
                 fontFamily: C.UI_FONT_FAMILY,
                 fontSize: '11px',
@@ -29,15 +29,15 @@ export default class ControlsHint {
         this.elements.push(this.controlsText);
         
         // Fade out after 10 seconds (only if visible)
-        if (!isMobile) {
-            this.scene.time.delayedCall(10000, () => {
-                this.scene.tweens.add({
-                    targets: this.controlsText,
-                    alpha: 0,
-                    duration: 1000
-                });
-            });
-        }
+        // if (!isMobile) {
+        //     this.scene.time.delayedCall(10000, () => {
+        //         this.scene.tweens.add({
+        //             targets: this.controlsText,
+        //             alpha: 0,
+        //             duration: 1000
+        //         });
+        //     });
+        // }
     }
     
     reposition() {

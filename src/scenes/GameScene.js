@@ -222,6 +222,8 @@ export default class GameScene extends Phaser.Scene {
         
         if (projectile && alien && projectile.owner === 'player' && alien.alive) {
             alien.takeDamage(projectile.damage);
+            // play hit marker sound
+            this.audioManager.playHitMarkerSound();
             projectile.hit(alien);
         }
     }

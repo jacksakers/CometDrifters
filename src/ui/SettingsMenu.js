@@ -24,7 +24,7 @@ export default class SettingsMenu {
         const bounds = this.scene.getUIBounds();
         
         // Settings icon container
-        this.iconContainer = this.scene.add.container(bounds.left, bounds.top);
+        this.iconContainer = this.scene.add.container(bounds.left + 20, bounds.top + 80);
         this.iconContainer.setDepth(1000);
         this.iconContainer.setScrollFactor(0);
         

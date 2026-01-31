@@ -25,7 +25,7 @@ export default class AudioManager {
         // Laser sounds
         this.scene.load.audio('laser1', 'sounds/laser-gun-blast-1.mp3');
         this.scene.load.audio('laser2', 'sounds/laser-gun-blast-2.mp3');
-        this.scene.load.audio('laser3', 'sounds/laser-gun-blast-3.mp3');
+        // this.scene.load.audio('laser3', 'sounds/laser-gun-blast-3.mp3');
         
         // Explosion sound
         this.scene.load.audio('explosion', 'sounds/medium-explosion.mp3');
@@ -35,6 +35,9 @@ export default class AudioManager {
         
         // Alien alert
         this.scene.load.audio('alienAlert', 'sounds/alien-alert-noise.mp3');
+
+        // Hit Marker
+        this.scene.load.audio('hitMarker', 'sounds/hit-marker.mp3');
     }
     
     /**
@@ -44,14 +47,17 @@ export default class AudioManager {
         // Create laser sounds
         this.sounds.laser1 = this.scene.sound.add('laser1', { volume: 0.3 });
         this.sounds.laser2 = this.scene.sound.add('laser2', { volume: 0.3 });
-        this.sounds.laser3 = this.scene.sound.add('laser3', { volume: 0.3 });
+        // this.sounds.laser3 = this.scene.sound.add('laser3', { volume: 0.3 });
         
         // Create explosion sound
         this.sounds.explosion = this.scene.sound.add('explosion', { volume: 0.4 });
+
+        // Create hit marker sound
+        this.sounds.hitMarker = this.scene.sound.add('hitMarker', { volume: 0.5 });
         
         // Create and start background music (loop)
         this.backgroundMusic = this.scene.sound.add('background', { 
-            volume: 0.2, 
+            volume: 0.3, 
             loop: true 
         });
         
@@ -76,7 +82,8 @@ export default class AudioManager {
     playLaserSound() {
         if (this.isMuted) return;
         
-        const laserSounds = [this.sounds.laser1, this.sounds.laser2, this.sounds.laser3];
+        // const laserSounds = [this.sounds.laser1, this.sounds.laser2, this.sounds.laser3];
+        const laserSounds = [this.sounds.laser1, this.sounds.laser2];
         const randomLaser = laserSounds[Math.floor(Math.random() * laserSounds.length)];
         randomLaser.play();
     }
@@ -89,6 +96,17 @@ export default class AudioManager {
         
         this.sounds.explosion.play();
     }
+
+    /**
+     * Play hit marker sound
+     */
+    playHitMarkerSound() {
+        if (this.isMuted) return;
+        
+        this.sounds.hitMarker.play();
+    }
+
+    /** */
     
     /**
      * Start alien alert sound
