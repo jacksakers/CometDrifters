@@ -106,6 +106,8 @@ export default class InputManager {
             // Negate the angle to flip the Y-axis (joystick Y is inverted from physics Y)
             if (angle !== null) {
                 angle = -angle;
+                // rotate the angle by 90 degrees CCW to align with ship forward direction
+                angle += Math.PI / 2;
                 
                 // Normalize to -PI to PI range
                 while (angle > Math.PI) angle -= Math.PI * 2;
