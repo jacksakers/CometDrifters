@@ -114,7 +114,7 @@ export default class SettingsMenu {
         
         // Menu background
         const menuWidth = Math.min(400, this.scene.scale.width - 40);
-        const menuHeight = 300;
+        const menuHeight = 360;
         
         this.menuBg = this.scene.add.rectangle(
             0, 0,
@@ -136,6 +136,9 @@ export default class SettingsMenu {
         // Mute button
         this.createMuteButton(menuWidth);
         
+        // Add bot button
+        this.createAddBotButton(menuWidth);
+        
         // Close button
         this.createCloseButton(menuWidth, menuHeight);
         
@@ -147,6 +150,9 @@ export default class SettingsMenu {
             this.muteButton,
             this.muteIcon,
             this.muteLabel,
+            this.botButton,
+            this.botIcon,
+            this.botLabel,
             this.closeButton,
             this.closeText
         ]);
@@ -218,6 +224,73 @@ export default class SettingsMenu {
             this.muteIcon.setText('🔊');
             this.muteLabel.setText('Sound: ON');
             this.muteButton.setFillStyle(0x334155);
+        }
+    }
+    
+    /**
+     * Create add bot button
+     */
+    createAddBotButton(menuWidth) {
+        const yPos = 40;
+        
+        // Bot button background
+        this.botButton = this.scene.add.rectangle(
+            0, yPos,
+            menuWidth - 60, 50,
+            0x334155,
+            1
+        );
+        this.botButton.setStrokeStyle(2, 0x475569);
+        this.botButton.setInteractive({ useHandCursor: true });
+        
+        // Bot icon (robot)
+        this.botIcon = this.scene.add.text(-menuWidth / 2 + 50, yPos, '🤖', {
+            fontSize: '28px'
+        });
+        this.botIcon.setOrigin(0.5);
+        
+        // Bot label
+        this.botLabel = this.scene.add.text(-menuWidth / 2 + 110, yPos, 'Add Bot', {
+            fontSize: '20px',
+            fontFamily: 'Arial, sans-serif',
+            color: '#f1f5f9'
+        });
+        this.botLabel.setOrigin(0, 0.5);
+        
+        // Click handler
+        this.botButton.on('pointerdown', () => this.addBotToRoom());
+        
+        // Hover effect
+        this.botButton.on('pointerover', () => {
+            this.botButton.setFillStyle(0x475569);
+        });
+        this.botButton.on('pointerout', () => {
+            this.botButton.setFillStyle(0x334155);
+        });
+    }
+    
+    /**
+     * Add a bot to the room
+     */
+    addBotToRoom() {
+        const { myPlayer } = window.Playroom;
+        
+        try {
+            const player = myPlayer();
+            if (!player) {
+                console.error('[SettingsMenu] Could not get player instance');
+                return;
+            }
+            
+            // Request to add a bot (Playroom will show the bot add UI on host)
+            if (window.Playroom.addBot) {
+                window.Playroom.addBot();
+                console.log('[SettingsMenu] Bot add requested');
+            } else {
+                console.error('[SettingsMenu] addBot function not available in Playroom');
+            }
+        } catch (error) {
+            console.error('[SettingsMenu] Error adding bot:', error);
         }
     }
     

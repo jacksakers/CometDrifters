@@ -283,6 +283,263 @@ export default class GameScene extends Phaser.Scene {
     }
     
     /**
+     * Update bot actions each frame
+     */
+    updateBotActions(botShip) {
+        if (!botShip || !botShip.playerState || !botShip.playerState.bot) return;
+        
+        const bot = botShip.playerState.bot;
+        const botType = bot.getBotType ? bot.getBotType() : 'nice';
+        
+        // Build game state for bot decision making
+        const gameState = {
+            nearestAlien: null,
+            distanceToAlien: Infinity,
+            nearestPlayer: null,
+            distanceToPlayer: Infinity
+        };
+        
+        // Find nearest alien
+        for (const alien of this.alienManager.getAliens()) {
+            if (!alien.alive) continue;
+            
+            const dx = alien.body.position.x - botShip.body.position.x;
+            const dy = alien.body.position.y - botShip.body.position.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (dist < gameState.distanceToAlien) {
+                gameState.distanceToAlien = dist;
+                gameState.nearestAlien = alien;
+            }
+        }
+        
+        // Find nearest player (for PvP bots)
+        if (botType === 'pvp') {
+            const allShips = this.multiplayerManager ? this.multiplayerManager.getAllShips() : [];
+            for (const ship of allShips) {
+                if (!ship.alive || ship === botShip) continue;
+                
+                const dx = ship.body.position.x - botShip.body.position.x;
+                const dy = ship.body.position.y - botShip.body.position.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist < gameState.distanceToPlayer) {
+                    gameState.distanceToPlayer = dist;
+                    gameState.nearestPlayer = ship;
+                }
+            }
+        }
+        
+        // Get bot decision
+        const action = bot.decideAction ? bot.decideAction(gameState) : null;
+        
+        if (!action) return;
+        
+        // Execute action
+        switch(action.type) {
+            case 'attack':
+                this.executeBotAttack(botShip, bot, action, gameState);
+                break;
+                
+            case 'move':
+                this.executeBotMove(botShip, bot, action);
+                break;
+                
+            case 'patrol':
+                this.executeBotPatrol(botShip, bot);
+                break;
+                
+            case 'dock':
+                this.executeBotDock(botShip, bot);
+                break;
+        }
+        
+        // Update cooldown
+        if (bot.updateCooldown) {
+            bot.updateCooldown();
+        }
+    }
+    
+    /**
+     * Execute bot attack action
+     */
+    executeBotAttack(botShip, bot, action, gameState) {
+        let target = null;
+        
+        if (action.targetType === 'alien') {
+            target = gameState.nearestAlien;
+        } else if (action.targetType === 'player') {
+            target = gameState.nearestPlayer;
+        }
+        
+        if (!target) return;
+        
+        // Calculate angle to target
+        const dx = target.body.position.x - botShip.body.position.x;
+        const dy = target.body.position.y - botShip.body.position.y;
+        const angleToTarget = Math.atan2(dy, dx);
+        
+        // Rotate toward target
+        let angleDiff = angleToTarget - botShip.body.angle;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        
+        // Rotate ship (similar to player rotation)
+        const rotationSpeed = C.ROTATION_SPEED || 0.1;
+        if (Math.abs(angleDiff) > 0.05) {
+            if (angleDiff > 0) {
+                botShip.body.angle += rotationSpeed;
+            } else {
+                botShip.body.angle -= rotationSpeed;
+            }
+        }
+        
+        // Thrust toward target if not too close
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance > 200) {
+            if (bot.thrust) bot.thrust();
+            const force = {
+                x: Math.cos(botShip.body.angle) * (C.THRUST_FORCE || 0.001),
+                y: Math.sin(botShip.body.angle) * (C.THRUST_FORCE || 0.001)
+            };
+            this.matter.body.applyForce(botShip.body, botShip.body.position, force);
+        }
+        
+        // Charge and shoot if roughly facing target
+        if (Math.abs(angleDiff) < 0.3) {
+            // Shoot if charged enough
+            if (bot.shoot) {
+                bot.shoot();
+            }
+        }
+    }
+    
+    /**
+     * Execute bot patrol action
+     */
+    executeBotPatrol(botShip, bot) {
+        // Random wandering
+        if (!botShip.botWanderAngle) {
+            botShip.botWanderAngle = Math.random() * Math.PI * 2;
+        }
+        
+        // Change wander direction occasionally
+        if (Math.random() < 0.02) {
+            botShip.botWanderAngle = Math.random() * Math.PI * 2;
+        }
+        
+        // Rotate toward wander angle
+        let angleDiff = botShip.botWanderAngle - botShip.body.angle;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        
+        const rotationSpeed = C.ROTATION_SPEED || 0.1;
+        if (Math.abs(angleDiff) > 0.1) {
+            if (angleDiff > 0) {
+                botShip.body.angle += rotationSpeed;
+            } else {
+                botShip.body.angle -= rotationSpeed;
+            }
+        }
+        
+        // Occasional thrust
+        if (Math.random() < 0.15) {
+            if (bot.thrust) bot.thrust();
+            const force = {
+                x: Math.cos(botShip.body.angle) * (C.THRUST_FORCE || 0.001),
+                y: Math.sin(botShip.body.angle) * (C.THRUST_FORCE || 0.001)
+            };
+            this.matter.body.applyForce(botShip.body, botShip.body.position, force);
+        }
+    }
+    
+    /**
+     * Execute bot move action
+     */
+    executeBotMove(botShip, bot, action) {
+        const targetAngle = action.direction || 0;
+        
+        // Rotate toward target direction
+        let angleDiff = targetAngle - botShip.body.angle;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        
+        const rotationSpeed = C.ROTATION_SPEED || 0.1;
+        if (Math.abs(angleDiff) > 0.1) {
+            if (angleDiff > 0) {
+                botShip.body.angle += rotationSpeed;
+            } else {
+                botShip.body.angle -= rotationSpeed;
+            }
+        }
+        
+        // Thrust in direction
+        if (bot.thrust) bot.thrust();
+        const force = {
+            x: Math.cos(botShip.body.angle) * (C.THRUST_FORCE || 0.001),
+            y: Math.sin(botShip.body.angle) * (C.THRUST_FORCE || 0.001)
+        };
+        this.matter.body.applyForce(botShip.body, botShip.body.position, force);
+    }
+    
+    /**
+     * Execute bot dock action
+     */
+    executeBotDock(botShip, bot) {
+        // Find nearest comet
+        let nearestComet = null;
+        let minDistance = Infinity;
+        
+        for (const comet of this.cometManager.getComets()) {
+            const dx = comet.body.position.x - botShip.body.position.x;
+            const dy = comet.body.position.y - botShip.body.position.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (dist < minDistance) {
+                minDistance = dist;
+                nearestComet = comet;
+            }
+        }
+        
+        if (!nearestComet) return;
+        
+        // Move toward comet
+        const dx = nearestComet.body.position.x - botShip.body.position.x;
+        const dy = nearestComet.body.position.y - botShip.body.position.y;
+        const angleToComet = Math.atan2(dy, dx);
+        
+        // Rotate toward comet
+        let angleDiff = angleToComet - botShip.body.angle;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        
+        const rotationSpeed = C.ROTATION_SPEED || 0.1;
+        if (Math.abs(angleDiff) > 0.1) {
+            if (angleDiff > 0) {
+                botShip.body.angle += rotationSpeed;
+            } else {
+                botShip.body.angle -= rotationSpeed;
+            }
+        }
+        
+        // Thrust toward comet
+        if (bot.thrust) bot.thrust();
+        const force = {
+            x: Math.cos(botShip.body.angle) * (C.THRUST_FORCE || 0.001),
+            y: Math.sin(botShip.body.angle) * (C.THRUST_FORCE || 0.001)
+        };
+        this.matter.body.applyForce(botShip.body, botShip.body.position, force);
+        
+        // Try to dock if close enough
+        if (minDistance < C.DOCK_DISTANCE * 1.5) {
+            if (botShip.isDocked === false && bot.dock) {
+                bot.dock();
+                botShip.dock(nearestComet);
+            }
+        }
+    }
+    
+    /**
      * Handle ship destruction
      */
     onShipDestroyed(data) {
@@ -390,6 +647,11 @@ export default class GameScene extends Phaser.Scene {
                             remoteShip.body.position.x,
                             remoteShip.body.position.y - C.SHIP_SIZE - 15
                         );
+                    }
+                    
+                    // Handle bot actions if this is a bot
+                    if (remoteShip.playerState && remoteShip.playerState.isBot && remoteShip.playerState.isBot()) {
+                        this.updateBotActions(remoteShip);
                     }
                 }
             }

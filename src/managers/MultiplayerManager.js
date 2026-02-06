@@ -1,5 +1,6 @@
 import * as C from '../config/constants.js';
 import Projectile from '../entities/Projectile.js';
+import GameBot from './GameBot.js';
 
 // Playroom Kit is loaded globally via UMD bundle in game.html
 const { insertCoin, onPlayerJoin, myPlayer, isHost, getState, setState, Joystick } = window.Playroom;
@@ -52,6 +53,14 @@ export default class MultiplayerManager {
                     fuel: C.SHIP_START_FUEL,
                     alive: true
                     // name is set per-player in handlePlayerJoin
+                },
+                enableBots: true,
+                botOptions: {
+                    botClass: GameBot,
+                    botParams: {
+                        health: C.SHIP_START_HEALTH,
+                        fuel: C.SHIP_START_FUEL
+                    }
                 }
             });
             
